@@ -227,6 +227,14 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   add_required_field("standard_metadata", "egress_spec");
   add_required_field("standard_metadata", "egress_port");
 
+  add_required_field("standard_metadata", "ra_registers");
+  add_required_field("standard_metadata", "ra_tables");
+  add_required_field("standard_metadata", "ra_program");
+
+  ra_registers[0] = 1111
+  ra_registers[1] = 2222
+  ra_registers[2] = 3333
+
   force_arith_header("standard_metadata");
   force_arith_header("queueing_metadata");
   force_arith_header("intrinsic_metadata");
@@ -253,6 +261,9 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // setting standard metadata
 
   phv->get_field("standard_metadata.ingress_port").set(port_num);
+  phv->get_field("standard_metadata.ra_registers").set(ra_registers[0]);
+  phv->get_field("standard_metadata.ra_tables").set(ra_registers[1]);
+  phv->get_field("standard_metadata.ra_program").set(ra_registers[2]);
   // using packet register 0 to store length, this register will be updated for
   // each add_header / remove_header primitive call
   packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
