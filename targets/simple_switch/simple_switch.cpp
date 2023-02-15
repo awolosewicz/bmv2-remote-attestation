@@ -261,9 +261,6 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // setting standard metadata
 
   phv->get_field("standard_metadata.ingress_port").set(port_num);
-  phv->get_field("standard_metadata.ra_registers").set(ra_registers[0]);
-  phv->get_field("standard_metadata.ra_tables").set(ra_registers[1]);
-  phv->get_field("standard_metadata.ra_program").set(ra_registers[2]);
   // using packet register 0 to store length, this register will be updated for
   // each add_header / remove_header primitive call
   packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
@@ -682,6 +679,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
 
     phv->get_field("standard_metadata.packet_length").set(
         packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX));
+    phv->get_field("standard_metadata.ra_registers").set(ra_registers[0]);
+    phv->get_field("standard_metadata.ra_tables").set(ra_registers[1]);
+    phv->get_field("standard_metadata.ra_program").set(ra_registers[2]);
 
     egress_mau->apply(packet.get());
 
