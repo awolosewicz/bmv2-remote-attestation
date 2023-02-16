@@ -231,9 +231,9 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   add_required_field("standard_metadata", "ra_tables");
   add_required_field("standard_metadata", "ra_program");
 
-  ra_registers[0] = 1111
-  ra_registers[1] = 2222
-  ra_registers[2] = 3333
+  ra_registers[0] = 1111;
+  ra_registers[1] = 2222;
+  ra_registers[2] = 3333;
 
   force_arith_header("standard_metadata");
   force_arith_header("queueing_metadata");
