@@ -8,9 +8,9 @@ source $THIS_DIR/common.sh
 check_lib libnanomsg libnanomsg.so.5.0.0
 
 set -e
-wget https://github.com/nanomsg/nanomsg/archive/1.0.0.tar.gz -O nanomsg-1.0.0.tar.gz
-tar -xzvf nanomsg-1.0.0.tar.gz
-cd nanomsg-1.0.0
+wget https://github.com/nanomsg/nanomsg/archive/refs/tags/1.1.5.tar.gz -O nanomsg-1.1.5.tar.gz
+tar -xzvf nanomsg-1.1.5.tar.gz
+cd nanomsg-1.1.5
 mkdir build
 cd build
 # I added -DCMAKE_INSTALL_PREFIX=/usr because on my Ubuntu 14.04 machine, the
