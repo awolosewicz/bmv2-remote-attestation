@@ -1,4 +1,25 @@
-# BEHAVIORAL MODEL (bmv2) WITH REMOTE ATTESTATION
+# BEHAVIORAL MODEL (bmv2)
+
+[![Build Status](https://travis-ci.org/p4lang/behavioral-model.svg?branch=master)](https://travis-ci.org/p4lang/behavioral-model)
+
+This is the second version of the reference P4 software switch, nicknamed bmv2
+(for behavioral model version 2). The software switch is written in C++11. It
+takes as input a JSON file generated from your P4 program by a [P4
+compiler](https://github.com/p4lang/p4c) and interprets it to implement the
+packet-processing behavior specified by that P4 program.
+
+This repository contains code for several variations of the behavioral
+model, e.g. `simple_switch`, `simple_switch_grpc`, `psa_switch`, etc.
+See [here](targets/README.md) for more details on the differences
+between these.
+
+**bmv2 is not meant to be a production-grade software switch**. It is meant to
+be used as a tool for developing, testing and debugging P4 data planes and
+control plane software written for them. As such, the performance of bmv2 - in
+terms of throughput and latency - is significantly less than that of a
+production-grade software switch like [Open
+vSwitch](https://www.openvswitch.org/). For more information about the
+performance of bmv2, refer to this [document](docs/performance.md).
 
 ## Dependencies
 

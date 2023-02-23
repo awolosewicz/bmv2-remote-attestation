@@ -10,29 +10,29 @@ then
 else
     LIBSSL_DEV="libssl-dev"
 fi
-#sudo apt-get install -y \
-#    automake \
-#    cmake \
-#    libjudy-dev \
-#    libgmp-dev \
-#    libpcap-dev \
-#    libboost-dev \
-#    libboost-test-dev \
-#    libboost-program-options-dev \
-#    libboost-system-dev \
-#    libboost-filesystem-dev \
-#    libboost-thread-dev \
-#    libevent-dev \
-#    libtool \
-#    flex \
-#    bison \
-#    pkg-config \
-#    g++ \
-#    $LIBSSL_DEV \
-#    libffi-dev \
-#    python-dev \
-#    python-pip \
-#    wget
+sudo apt-get install -y \
+    automake \
+    cmake \
+    libjudy-dev \
+    libgmp-dev \
+    libpcap-dev \
+    libboost-dev \
+    libboost-test-dev \
+    libboost-program-options-dev \
+    libboost-system-dev \
+    libboost-filesystem-dev \
+    libboost-thread-dev \
+    libevent-dev \
+    libtool \
+    flex \
+    bison \
+    pkg-config \
+    g++ \
+    $LIBSSL_DEV \
+    libffi-dev \
+    python-dev \
+    python-pip \
+    wget
 
 tmpdir=`mktemp -d -p .`
 cd $tmpdir
