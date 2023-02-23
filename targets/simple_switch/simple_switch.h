@@ -79,6 +79,7 @@ class SimpleSwitch : public Switch {
   };
 
   static constexpr port_t default_drop_port = 511;
+  static constexpr size_t nb_ra_registers = 4u;
 
  private:
   using clock = std::chrono::high_resolution_clock;
@@ -186,6 +187,7 @@ class SimpleSwitch : public Switch {
   port_t drop_port;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
+  std::array<uint64_t, nb_ra_registers> ra_registers;
   // for these queues, the write operation is non-blocking and we drop the
   // packet if the queue is full
 #ifdef SSWITCH_PRIORITY_QUEUEING_ON
