@@ -739,11 +739,12 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
       phv->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
       phv->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
-      phv->get_header("remoteAttestation").mark_valid()
+      phv->get_header("remoteAttestation").mark_valid();
+      BMLOG_DEBUG_PKT(*packet, "Is RemoteAtt Valid? {}", phv->get_header("remoteAttestation").is_Valid());
     }
     else {
       bm::header_id_t raHeaderID = phv->get_headers_size();
-      BMLOG_DEBUG_PKT(*packet, "PHV Capacity is {} while raHeaderID is {}", phv->get_capacity(), raHeaderID);
+      //BMLOG_DEBUG_PKT(*packet, "PHV Capacity is {} while raHeaderID is {}", phv->get_capacity(), raHeaderID);
       std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
 
@@ -756,7 +757,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
       phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
       phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
-      phv->get_header("remoteAttestation").mark_valid()
+      phv->get_header("remoteAttestation").mark_valid();
+      BMLOG_DEBUG_PKT(*packet, "Is RemoteAtt Valid? {}", phv->get_header("remoteAttestation").is_Valid());
       /*
       bm::header_id_t raHeaderID = phv->get_headers_size();
       std::set<int> arithSet;
