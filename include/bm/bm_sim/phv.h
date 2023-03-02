@@ -93,6 +93,11 @@ class PHV {
   PHV(size_t num_headers, size_t num_header_stacks,
       size_t num_header_unions, size_t num_header_union_stacks);
 
+  // Get the length of the headers vector
+  int get_headers_size() {
+    return headers.size()
+  }
+
   //! Access the Header with id \p header_index, with no bound checking.
   Header &get_header(header_id_t header_index) {
     return headers[header_index];

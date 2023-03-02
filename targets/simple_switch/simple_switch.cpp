@@ -20,6 +20,7 @@
 
 #include <bm/bm_sim/_assert.h>
 #include <bm/bm_sim/parser.h>
+#include <bm/bm_sim/headers.h>
 #include <bm/bm_sim/tables.h>
 #include <bm/bm_sim/logger.h>
 
@@ -261,6 +262,9 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // setting standard metadata
 
   phv->get_field("standard_metadata.ingress_port").set(port_num);
+  phv->get_field("standard_metadata.ra_registers").set(ra_registers[0]);
+  phv->get_field("standard_metadata.ra_tables").set(ra_registers[1]);
+  phv->get_field("standard_metadata.ra_program").set(ra_registers[2]);
   // using packet register 0 to store length, this register will be updated for
   // each add_header / remove_header primitive call
   packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
@@ -679,9 +683,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
 
     phv->get_field("standard_metadata.packet_length").set(
         packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX));
-    phv->get_field("standard_metadata.ra_registers").set(ra_registers[0]);
-    phv->get_field("standard_metadata.ra_tables").set(ra_registers[1]);
-    phv->get_field("standard_metadata.ra_program").set(ra_registers[2]);
 
     egress_mau->apply(packet.get());
 
@@ -727,6 +728,27 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     if (egress_spec == drop_port) {  // drop packet
       BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of egress");
       continue;
+    }
+
+    //Add Remote Attestation header, or update if it exists
+    if(phv.has_header("remoteAttestation")) {
+      phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
+      phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
+      phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
+    }
+    else {
+      int raHeaderID = phv.get_headers_size();
+      bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
+
+      remoteAttestationHeaderType.push_back_field("ra_registers", 32);
+      remoteAttestationHeaderType.push_back_field("ra_tables", 32);
+      remoteAttestationHeaderType.push_back_field("ra_program", 32);
+
+      phv.push_back_header("remoteAttestation", raHeaderID, remoteAttestationHeaderType);
+
+      phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
+      phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
+      phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
     }
 
     deparser->deparse(packet.get());

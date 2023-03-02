@@ -1,6 +1,10 @@
 {
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
-        "memory": "cpp"
+        "memory": "cpp",
+        "xstring": "cpp",
+        "vector": "cpp",
+        "bitset": "cpp",
+        "set": "cpp"
     }
 }
