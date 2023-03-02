@@ -98,6 +98,10 @@ class PHV {
     return headers.size();
   }
 
+  size_t get_capacity() {
+    return capacity;
+  }
+
   //! Access the Header with id \p header_index, with no bound checking.
   Header &get_header(header_id_t header_index) {
     return headers[header_index];
