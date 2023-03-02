@@ -741,7 +741,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
     }
     else {
-      bm::header_id_t raHeaderID = phv->get_headers_size() - 1;
+      bm::header_id_t raHeaderID = phv->get_headers_size();
       std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
 
@@ -771,7 +771,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
                                        h,
                                        phv->get_header(h).get_header_type(),
                                        phv->get_header(h).is_metadata());
-      }/*
+      }
+      //The below for block is not fully implemented
       bm::HeaderType dummyHeader("placeholder", 0); //deprecated argument
       for (bm::header_stack_id_t hs = 0; hs < phv->get_header_stack_size(); hs++) {
         //push_back_header_stack(name, index, type, headers)
