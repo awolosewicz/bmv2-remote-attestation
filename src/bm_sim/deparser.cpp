@@ -56,6 +56,7 @@ Deparser::get_headers_size(const PHV &phv) const {
   size_t headers_size = 0;
   for (auto it = headers.begin(); it != headers.end(); ++it) {
     const Header &header = phv.get_header(*it);
+    BMLOG_DEBUG_PKT(*pkt, "Deparser getting size of header '{}' - valid {}", header.get_name(), header.is_valid());
     if (header.is_valid()) {
       headers_size += header.get_nbytes_packet();
     }
