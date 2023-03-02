@@ -767,11 +767,11 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       bm::PHVFactory newPHVFactory;
       for (bm::header_id_t h = 0; h < phv->get_headers_size(); h++) {
         //push_back_header(header_name, header_index, header_type, bool metadata)
-        bm::Header currentHeader = phv->get_header(h);
-        newPHVFactory->push_back_header(currentHeader.get_name(),
-                                        h,
-                                        currentHeader.get_header_type(),
-                                        currentHeader.is_metadata());
+        bm::Header *currentHeader = phv->get_header(h);
+        newPHVFactory.push_back_header(currentHeader->get_name(),
+                                       h,
+                                       currentHeader->begin(),
+                                       currentHeader->is_metadata());
       }/*
       bm::HeaderType dummyHeader("placeholder", 0); //deprecated argument
       for (bm::header_stack_id_t hs = 0; hs < phv->get_header_stack_size(); hs++) {
@@ -791,7 +791,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
                                      remoteAttestationHeaderType);
       bm::PHVSourceIface *phv_source = get_phv_source()
       phv_source->set_phv_factory(0u, newPHVFactory);
-      PHV *newPHV;
+      std::unique_ptr<PHV> newPHV;
       newPHV = phv_source->get(0u);
       newPHV->copy_header_stacks_unions(phv);
       newPHV->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
