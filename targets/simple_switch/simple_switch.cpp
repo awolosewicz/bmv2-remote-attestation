@@ -516,9 +516,6 @@ SimpleSwitch::ingress_thread() {
       phv->get_field("standard_metadata.ra_tables").set(phv->get_field("remoteAttestation.ra_tables"));
       phv->get_field("standard_metadata.ra_program").set(phv->get_field("remoteAttestation.ra_program"));
     }
-    else (
-
-    )
 
     if (phv->has_field("standard_metadata.parser_error")) {
       phv->get_field("standard_metadata.parser_error").set(
