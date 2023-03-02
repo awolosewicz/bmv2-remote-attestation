@@ -744,7 +744,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       remoteAttestationHeaderType.push_back_field("ra_tables", 32);
       remoteAttestationHeaderType.push_back_field("ra_program", 32);
 
-      phv->push_back_header("remoteAttestation", raHeaderID, remoteAttestationHeaderType);
+      bm::PHV::push_back_header("remoteAttestation", raHeaderID, remoteAttestationHeaderType);
 
       phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
       phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
