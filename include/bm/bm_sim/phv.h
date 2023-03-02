@@ -95,7 +95,7 @@ class PHV {
 
   // Get the length of the headers vector
   int get_headers_size() {
-    return headers.size()
+    return headers.size();
   }
 
   //! Access the Header with id \p header_index, with no bound checking.
