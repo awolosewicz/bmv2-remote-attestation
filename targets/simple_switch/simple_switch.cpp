@@ -742,7 +742,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
     else {
       bm::header_id_t raHeaderID = phv->get_headers_size();
-      BMLOG_DEBUG_PKT(*packet, "PHV Capacity is {}", phv->get_capacity());
+      BMLOG_DEBUG_PKT(*packet, "PHV Capacity is {} while raHeaderID is {}", phv->get_capacity(), raHeaderID);
       std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
 
