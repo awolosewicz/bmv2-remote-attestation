@@ -764,7 +764,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       remoteAttestationHeaderType.push_back_field("ra_tables", 32);
       remoteAttestationHeaderType.push_back_field("ra_program", 32);
       //make PHVFactory, copy headers from current PHV, add new header, create new phv, set phv to packet
-      bm::PHVFactory newPHVFactory;
+      bm::PHVFactory newPHVFactory{};
       for (bm::header_id_t h = 0; h < phv->get_headers_size(); h++) {
         //push_back_header(header_name, header_index, header_type, bool metadata)
         //bm::Header currentHeader = ;
@@ -790,7 +790,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
                                      raHeaderID,
                                      remoteAttestationHeaderType);
       bm::PHVSourceIface *phv_source = get_phv_source();
-      phv_source->set_phv_factory(0u, newPHVFactory);
+      phv_source->set_phv_factory(0u, &newPHVFactory);
       std::unique_ptr<PHV> newPHV;
       newPHV = phv_source->get(0u);
       //newPHV->copy_header_stacks_unions(phv);
