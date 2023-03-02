@@ -792,7 +792,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       bm::PHVSourceIface *phv_source = get_phv_source();
       phv_source->set_phv_factory(0u, &newPHVFactory);
       std::unique_ptr<PHV> newPHV;
+      BMLOG_DEBUG("Create new PHV for RA");
       newPHV = phv_source->get(0u);
+      BMLOG_DEBUG("Successfully extended PHV");
       //newPHV->copy_header_stacks_unions(phv);
       newPHV->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
       newPHV->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
