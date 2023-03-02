@@ -227,7 +227,8 @@ class Packet final {
   const PHV *get_phv() const { return phv.get(); }
 
   void set_phv(PHV *newPHV) {
-    phv = newPHV;
+    phv.release();
+    phv.reset(newPHV);
     return;
   }
 

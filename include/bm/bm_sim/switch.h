@@ -112,7 +112,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   }
 
   PHVSourceIface *get_phv_source() {
-    return phv_source;
+    return phv_source.get();
   }
 
   int receive(port_t port_num, const char *buffer, int len);

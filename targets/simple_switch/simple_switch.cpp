@@ -789,16 +789,16 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       newPHVFactory.push_back_header("remoteAttestation_h",
                                      raHeaderID,
                                      remoteAttestationHeaderType);
-      std::unique_ptr<bm::PHVSourceIface> phv_source = get_phv_source()
+      bm::PHVSourceIface *phv_source = get_phv_source()
       phv_source->set_phv_factory(0u, newPHVFactory);
-      std::unique_ptr<PHV> newPHV;
+      PHV *newPHV;
       newPHV = phv_source->get(0u);
       newPHV->copy_header_stacks_unions(phv);
       newPHV->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
       newPHV->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
       newPHV->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
       newPHV->set_packet_id(packet_id, 0u);
-      packet->set_phv(newPHV);
+      packet->set_phv(newPHV.get());
     }
 
     deparser->deparse(packet.get());
