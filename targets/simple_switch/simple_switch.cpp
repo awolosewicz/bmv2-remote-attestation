@@ -511,11 +511,14 @@ SimpleSwitch::ingress_thread() {
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
     parser->parse(packet.get());
 
-    if (phv->has_header("remoteAttestation_h")) {
-      phv->get_field("standard_metadata.ra_registers").set(phv->get_field("remoteAttestation_h.ra_registers"));
-      phv->get_field("standard_metadata.ra_tables").set(phv->get_field("remoteAttestation_h.ra_tables"));
-      phv->get_field("standard_metadata.ra_program").set(phv->get_field("remoteAttestation_h.ra_program"));
+    if (phv->has_header("remoteAttestation")) {
+      phv->get_field("standard_metadata.ra_registers").set(phv->get_field("remoteAttestation.ra_registers"));
+      phv->get_field("standard_metadata.ra_tables").set(phv->get_field("remoteAttestation.ra_tables"));
+      phv->get_field("standard_metadata.ra_program").set(phv->get_field("remoteAttestation.ra_program"));
     }
+    else (
+
+    )
 
     if (phv->has_field("standard_metadata.parser_error")) {
       phv->get_field("standard_metadata.parser_error").set(
@@ -735,11 +738,12 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     //Add Remote Attestation header, or update if it exists
-    if(phv->has_header("remoteAttestation_h")) {
-      phv->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
-      phv->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
-      phv->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
+    if(phv->has_header("remoteAttestation")) {
+      phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
+      phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
+      phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
       phv->get_header("remoteAttestation").mark_valid();
+      deparser->push_back_header(raHeaderID);
       BMLOG_DEBUG_PKT(*packet, "Is RemoteAtt Valid? {}", phv->get_header("remoteAttestation").is_valid());
     }
     else {
