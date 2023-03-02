@@ -226,7 +226,7 @@ class Packet final {
   //! @copydoc get_phv
   const PHV *get_phv() const { return phv.get(); }
 
-  void set_phv(PHV newPHV) {
+  void set_phv(std::unique_ptr<PHV> newPHV) {
     phv = newPHV;
     return;
   }

@@ -111,7 +111,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
     return &contexts.at(cxt_id);
   }
 
-  void get_phv_source() {
+  std::unique_ptr<PHVSourceIface> get_phv_source() {
     return phv_source;
   }
 
