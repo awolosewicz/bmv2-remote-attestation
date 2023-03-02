@@ -158,6 +158,11 @@ class PHV {
     return (it != fields_map.end());
   }
 
+  // Get the length of the header stack vector
+  int get_header_stack_size() {
+    return header_stacks.size();
+  }
+
   //! Access the HeaderStack with id \p header_stack_index, with no bound
   //! checking.
   HeaderStack &get_header_stack(header_stack_id_t header_stack_index) {
@@ -168,6 +173,11 @@ class PHV {
   const HeaderStack &get_header_stack(
       header_stack_id_t header_stack_index) const {
     return header_stacks[header_stack_index];
+  }
+
+  // Get the length of the header stack vector
+  int get_header_union_size() {
+    return header_unions.size();
   }
 
   //! Access the HeaderUnion with id \p header_union_index, with no bound
@@ -235,6 +245,7 @@ class PHV {
   //!   - receives the same field values as the corresponding \p src header iff
   //! it is a valid packet header or a metadata header
   void copy_headers(const PHV &src);
+  void copy_header_stacks_unions(const PHV &src);
 
   void set_packet_id(const uint64_t id1, const uint64_t id2) {
     packet_id = {id1, id2};

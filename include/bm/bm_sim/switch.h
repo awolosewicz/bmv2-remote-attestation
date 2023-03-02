@@ -111,6 +111,10 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
     return &contexts.at(cxt_id);
   }
 
+  void get_phv_source() {
+    return phv_source;
+  }
+
   int receive(port_t port_num, const char *buffer, int len);
 
   //! Call this function when you are ready to process packets. This function

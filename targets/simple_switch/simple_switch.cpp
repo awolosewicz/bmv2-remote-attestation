@@ -23,6 +23,7 @@
 #include <bm/bm_sim/headers.h>
 #include <bm/bm_sim/tables.h>
 #include <bm/bm_sim/logger.h>
+#include <bm/bm_sim/phv_source.h>
 
 #include <unistd.h>
 
@@ -510,10 +511,10 @@ SimpleSwitch::ingress_thread() {
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
     parser->parse(packet.get());
 
-    if (phv->has_header("remoteAttestation")) {
-      phv->get_field("standard_metadata.ra_registers").set(phv->get_field("remoteAttestation.ra_registers"));
-      phv->get_field("standard_metadata.ra_tables").set(phv->get_field("remoteAttestation.ra_tables"));
-      phv->get_field("standard_metadata.ra_program").set(phv->get_field("remoteAttestation.ra_program"));
+    if (phv->has_header("remoteAttestation_h")) {
+      phv->get_field("standard_metadata.ra_registers").set(phv->get_field("remoteAttestation_h.ra_registers"));
+      phv->get_field("standard_metadata.ra_tables").set(phv->get_field("remoteAttestation_h.ra_tables"));
+      phv->get_field("standard_metadata.ra_program").set(phv->get_field("remoteAttestation_h.ra_program"));
     }
 
     if (phv->has_field("standard_metadata.parser_error")) {
@@ -734,12 +735,13 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     //Add Remote Attestation header, or update if it exists
-    if(phv->has_header("remoteAttestation")) {
-      phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
-      phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
-      phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
+    if(phv->has_header("remoteAttestation_h")) {
+      phv->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
+      phv->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
+      phv->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
     }
     else {
+      /*
       int raHeaderID = phv->get_headers_size();
       std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
@@ -753,6 +755,50 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
       phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
       phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
+      */
+      bm::header_id_t raHeaderID = phv->get_headers_size();
+      std::set<int> arithSet;
+      bm::HeaderType remoteAttestationHeaderType("remoteAttestation_h", raHeaderID);
+
+      remoteAttestationHeaderType.push_back_field("ra_registers", 32);
+      remoteAttestationHeaderType.push_back_field("ra_tables", 32);
+      remoteAttestationHeaderType.push_back_field("ra_program", 32);
+      //make PHVFactory, copy headers from current PHV, add new header, create new phv, set phv to packet
+      bm::PHVFactory newPHVFactory;
+      for (bm::header_id_t h = 0; h < phv->get_headers_size(); h++) {
+        //push_back_header(header_name, header_index, header_type, bool metadata)
+        bm::Header currentHeader = phv->get_header(h);
+        newPHVFactory->push_back_header(currentHeader.get_name(),
+                                        h,
+                                        currentHeader.get_header_type(),
+                                        currentHeader.is_metadata());
+      }/*
+      bm::HeaderType dummyHeader("placeholder", 0); //deprecated argument
+      for (bm::header_stack_id_t hs = 0; hs < phv->get_header_stack_size(); hs++) {
+        //push_back_header_stack(name, index, type, headers)
+        bm::HeaderStack currentHeaderStack = phv->get_header_stack(hs);
+        std::vector<bm::header_id_t> hs_ids;
+        for(bm::header_id_t hsh = 0; hsh < currentHeaderStack.get_depth(); hsh++) {
+          hs_ids.push_back(currentHeaderStack.elements[hsh].get_id())
+        }
+        newPHVFactory->push_back_header_stack(currentHeaderStack.get_name(),
+                                              hs,
+                                              dummyHeader,
+                                              hs_ids);
+      } */
+      newPHVFactory.push_back_header("remoteAttestation_h",
+                                     raHeaderID,
+                                     remoteAttestationHeaderType);
+      std::unique_ptr<bm::PHVSourceIface> phv_source = get_phv_source()
+      phv_source->set_phv_factory(0u, newPHVFactory);
+      std::unique_ptr<PHV> newPHV;
+      newPHV = phv_source->get(0u);
+      newPHV->copy_header_stacks_unions(phv);
+      newPHV->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
+      newPHV->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
+      newPHV->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
+      newPHV->set_packet_id(packet_id, 0u);
+      packet->set_phv(newPHV);
     }
 
     deparser->deparse(packet.get());

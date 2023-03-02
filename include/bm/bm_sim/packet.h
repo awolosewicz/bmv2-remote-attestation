@@ -226,6 +226,11 @@ class Packet final {
   //! @copydoc get_phv
   const PHV *get_phv() const { return phv.get(); }
 
+  void set_phv(PHV newPHV) {
+    phv = newPHV;
+    return;
+  }
+
   //! Write to general purpose register at index \p idx
   void set_register(size_t idx, uint64_t v) { registers.at(idx) = v; }
   //! Read general purpose register at index \p idx
