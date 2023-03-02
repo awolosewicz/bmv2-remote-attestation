@@ -741,7 +741,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
     }
     else {
-      int raHeaderID = phv->get_headers_size();
+      bm::header_id_t raHeaderID = phv->get_headers_size() - 1;
       std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
 
