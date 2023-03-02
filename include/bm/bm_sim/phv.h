@@ -293,7 +293,9 @@ class PHV {
   const std::string get_field_name(header_id_t header_index,
                                    int field_offset) const;
 
- private:
+ public:
+  // awolosewicz: this was private, made public. Below comment was at the time of change
+
   // To  be used only by PHVFactory
   // all headers need to be pushed back in order (according to header_index) !!!
   // TODO(antonin): remove this constraint?

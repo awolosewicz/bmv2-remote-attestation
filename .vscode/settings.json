@@ -5,6 +5,7 @@
         "xstring": "cpp",
         "vector": "cpp",
         "bitset": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "unordered_map": "cpp"
     }
 }

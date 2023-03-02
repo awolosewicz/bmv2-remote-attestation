@@ -738,13 +738,14 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
     else {
       int raHeaderID = phv->get_headers_size();
+      std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
 
       remoteAttestationHeaderType.push_back_field("ra_registers", 32);
       remoteAttestationHeaderType.push_back_field("ra_tables", 32);
       remoteAttestationHeaderType.push_back_field("ra_program", 32);
 
-      bm::PHV::push_back_header("remoteAttestation", raHeaderID, remoteAttestationHeaderType);
+      phv->push_back_header("remoteAttestation", raHeaderID, remoteAttestationHeaderType, &arithSet, False);
 
       phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
       phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
