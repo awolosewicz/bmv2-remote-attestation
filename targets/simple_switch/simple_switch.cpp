@@ -739,9 +739,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
       phv->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
       phv->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
-      phv->get_header("remoteAttestation").recompute_nbytes_packet();
       phv->get_header("remoteAttestation").mark_valid();
-      deparser->push_back_header(raHeaderID);
       BMLOG_DEBUG_PKT(*packet, "Is RemoteAtt Valid? {}", phv->get_header("remoteAttestation").is_valid());
     }
     else {
