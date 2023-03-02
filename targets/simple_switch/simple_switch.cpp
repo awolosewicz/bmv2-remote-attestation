@@ -262,9 +262,6 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // setting standard metadata
 
   phv->get_field("standard_metadata.ingress_port").set(port_num);
-  phv->get_field("standard_metadata.ra_registers").set(ra_registers[0]);
-  phv->get_field("standard_metadata.ra_tables").set(ra_registers[1]);
-  phv->get_field("standard_metadata.ra_program").set(ra_registers[2]);
   // using packet register 0 to store length, this register will be updated for
   // each add_header / remove_header primitive call
   packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
@@ -512,6 +509,12 @@ SimpleSwitch::ingress_thread() {
        deparser. TODO? */
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
     parser->parse(packet.get());
+
+    if (phv->has_header("remoteAttestation")) {
+      phv->get_field("standard_metadata.ra_registers").set(phv->get_field("remoteAttestation.ra_registers"));
+      phv->get_field("standard_metadata.ra_tables").set(phv->get_field("remoteAttestation.ra_tables"));
+      phv->get_field("standard_metadata.ra_program").set(phv->get_field("remoteAttestation.ra_program"));
+    }
 
     if (phv->has_field("standard_metadata.parser_error")) {
       phv->get_field("standard_metadata.parser_error").set(
