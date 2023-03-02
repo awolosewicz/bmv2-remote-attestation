@@ -741,7 +741,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
     }
     else {
-      /*
       int raHeaderID = phv->get_headers_size();
       std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
@@ -755,7 +754,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
       phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
       phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
-      */
+      /*
       bm::header_id_t raHeaderID = phv->get_headers_size();
       std::set<int> arithSet;
       bm::HeaderType remoteAttestationHeaderType("remoteAttestation_h", raHeaderID);
@@ -785,7 +784,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
                                               hs,
                                               dummyHeader,
                                               hs_ids);
-      } */
+      }
       newPHVFactory.push_back_header("remoteAttestation_h",
                                      raHeaderID,
                                      remoteAttestationHeaderType);
@@ -800,7 +799,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       newPHV->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
       newPHV->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
       newPHV->set_packet_id(packet_id, 0u);
-      packet->set_phv(newPHV.get());
+      packet->set_phv(newPHV.get()); */
     }
 
     deparser->deparse(packet.get());

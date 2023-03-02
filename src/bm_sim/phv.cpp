@@ -29,11 +29,11 @@ namespace bm {
 
 PHV::PHV(size_t num_headers, size_t num_header_stacks,
          size_t num_header_unions, size_t num_header_union_stacks)
-    : capacity(num_headers), capacity_stacks(num_header_stacks),
+    : capacity(num_headers+1), capacity_stacks(num_header_stacks),
       capacity_unions(num_header_unions),
       capacity_union_stacks(num_header_union_stacks) {
   // this is needed, otherwise our references will not be valid anymore
-  headers.reserve(num_headers);
+  headers.reserve(num_headers+1);
   header_stacks.reserve(num_header_stacks);
   header_unions.reserve(num_header_unions);
   header_union_stacks.reserve(num_header_union_stacks);
