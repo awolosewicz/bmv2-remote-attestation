@@ -35,7 +35,7 @@ PHV::PHV(size_t num_headers, size_t num_header_stacks,
   // this is needed, otherwise our references will not be valid anymore
   headers.reserve(num_headers+1);
   header_stacks.reserve(num_header_stacks);
-  header_unions.reserve(num_header_unions);
+  header_unions.reserve(num_header_unions)
   header_union_stacks.reserve(num_header_union_stacks);
 }
 
