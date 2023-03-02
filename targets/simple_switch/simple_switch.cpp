@@ -770,7 +770,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         //bm::Header currentHeader = ;
         newPHVFactory.push_back_header(phv->get_header(h).get_name(),
                                        h,
-                                       phv->get_header(h).begin(),
+                                       phv->get_header(h).get_header_type(),
                                        phv->get_header(h).is_metadata());
       }/*
       bm::HeaderType dummyHeader("placeholder", 0); //deprecated argument
@@ -789,7 +789,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       newPHVFactory.push_back_header("remoteAttestation_h",
                                      raHeaderID,
                                      remoteAttestationHeaderType);
-      bm::PHVSourceIface *phv_source = get_phv_source()
+      bm::PHVSourceIface *phv_source = get_phv_source();
       phv_source->set_phv_factory(0u, newPHVFactory);
       std::unique_ptr<PHV> newPHV;
       newPHV = phv_source->get(0u);
