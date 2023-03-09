@@ -516,6 +516,7 @@ SimpleSwitch::ingress_thread() {
     packetDataIngress += 8 + 6 + 6;
     unsigned short etype = *packetDataIngress;
     BMLOG_DEBUG_PKT(*packet, "Switch beginning pre-parse for RA");
+    BMLOG_DEBUG_PKT(*packet, "Etype checked as {}", etype);
     if (etype == 32768) { // IPv4, 0x8000
       BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x800");
       //Grab the ihl value, to be used later
