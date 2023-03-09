@@ -826,26 +826,26 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       packetDataEgress += 1;
       for(int q = 0; q < 3; q++) {
         uint32_t tempval = ra_registers[q];
-        tempval >> 24;
-        *packetDataEgress = (char)tempval;
+        //tempval >> 24;
+        *packetDataEgress = (char)(tempval >> 24);
         packetDataEgress += 1;
 
         tempval = ra_registers[q];
-        tempval << 8;
-        tempval >> 24;
-        *packetDataEgress = (char)tempval;
+        //tempval << 8;
+        //tempval >> 24;
+        *packetDataEgress = (char)((tempval << 8) >> 24);
         packetDataEgress += 1;
 
         tempval = ra_registers[q];
-        tempval << 16;
-        tempval >> 24;
-        *packetDataEgress = (char)tempval;
+        //tempval << 16;
+        //tempval >> 24;
+        *packetDataEgress = (char)((tempval << 16) >> 24);
         packetDataEgress += 1;
 
         tempval = ra_registers[q];
-        tempval << 24;
-        tempval >> 24;
-        *packetDataEgress = (char)tempval;
+        //tempval << 24;
+        //tempval >> 24;
+        *packetDataEgress = (char)((tempval << 24) >> 24);
         packetDataEgress += 1;
       }
       //uint32_t *registerPlacer = (uint32_t *)packetDataEgress;
