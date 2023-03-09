@@ -806,7 +806,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
 
     if (isRAResponse) {
       packetDataEgress += 1;
-      uint32_t *registerPlacer = packetDataEgress;
+      uint32_t *registerPlacer = (uint32_t *)packetDataEgress;
       *registerPlacer = ra_registers[0];
       registerPlacer += 4;
       *registerPlacer = ra_registers[1];
