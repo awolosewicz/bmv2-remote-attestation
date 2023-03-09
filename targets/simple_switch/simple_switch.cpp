@@ -509,13 +509,39 @@ SimpleSwitch::ingress_thread() {
        parser leave the buffer unchanged, and move the pop logic to the
        deparser. TODO? */
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
-    parser->parse(packet.get());
 
-    if (phv->has_header("remoteAttestation")) {
-      phv->get_field("standard_metadata.ra_registers").set(phv->get_field("remoteAttestation.ra_registers"));
-      phv->get_field("standard_metadata.ra_tables").set(phv->get_field("remoteAttestation.ra_tables"));
-      phv->get_field("standard_metadata.ra_program").set(phv->get_field("remoteAttestation.ra_program"));
+    char *packetDataIngress = packet->data();
+    //First offset = 8 + 6 + 6
+    // 64 bits for ethernet L1, 48 for dst MAC, 48 for src MAC, arrive at ethertype
+    packetDataIngress += 8 + 6 + 6;
+    unsigned short etype = *packetDataIngress;
+    if (etype == 32768) { // IPv4, 0x8000
+      //Grab the ihl value, to be used later
+      packetDataIngress += 2;
+      unsigned char ihl = *packetDataIngress;
+      /*Next shift is to proto field, crossing
+        8 bits for ver and ihl
+        6+2 bits for dscp and ecn
+        16 bits for length
+        16 bits for ID
+        16 bits for flags and frag offset
+        8 bits fot TTL
+      */
+      packetDataIngress += 1 + 1 + 2 + 2 + 2 + 1;
+      unsigned char proto = *packetDataIngress;
+      if (proto == 144) { //Remote Attestation, 0x90
+        //Next shift is to start of RA header, so must cover all of IPv4
+        //IHL is the size of the IPv4 header in 32 bit (4 byte) blocks
+        //9 bytes are already covered
+        //Must subtract off the value from version, which is the value 4
+        //in the upper 4 bits
+        packetDataIngress += (ihl - 64) * 4 - 9;
+        unsigned char raType = *packetDataIngress;
+        if (raType == 1) isRARequest = true;
+      }
     }
+
+    parser->parse(packet.get());
 
     if (phv->has_field("standard_metadata.parser_error")) {
       phv->get_field("standard_metadata.parser_error").set(
@@ -734,85 +760,61 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       continue;
     }
 
-    //Add Remote Attestation header, or update if it exists
-    if(phv->has_header("remoteAttestation")) {
-      phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
-      phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
-      phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
-      phv->get_header("remoteAttestation").mark_valid();
-      bm::header_id_t raHeaderID = phv->get_header("remoteAttestation").get_id();
-      deparser->push_back_header(raHeaderID);
-      BMLOG_DEBUG_PKT(*packet, "Is RemoteAtt Valid? {}", phv->get_header("remoteAttestation").is_valid());
-    }
-    else {
-      bm::header_id_t raHeaderID = phv->get_headers_size();
-      //BMLOG_DEBUG_PKT(*packet, "PHV Capacity is {} while raHeaderID is {}", phv->get_capacity(), raHeaderID);
-      std::set<int> arithSet;
-      bm::HeaderType remoteAttestationHeaderType("remoteAttestation_t", raHeaderID);
-
-      remoteAttestationHeaderType.push_back_field("ra_registers", 32);
-      remoteAttestationHeaderType.push_back_field("ra_tables", 32);
-      remoteAttestationHeaderType.push_back_field("ra_program", 32);
-
-      phv->push_back_header("remoteAttestation", raHeaderID, remoteAttestationHeaderType, arithSet, false);
-
-      phv->get_field("remoteAttestation.ra_registers").set(ra_registers[0]);
-      phv->get_field("remoteAttestation.ra_tables").set(ra_registers[1]);
-      phv->get_field("remoteAttestation.ra_program").set(ra_registers[2]);
-      phv->get_header("remoteAttestation").recompute_nbytes_packet();
-      phv->get_header("remoteAttestation").mark_valid();
-      deparser->push_back_header(raHeaderID);
-      BMLOG_DEBUG_PKT(*packet, "Is RemoteAtt Valid? {}", phv->get_header("remoteAttestation").is_valid());
-      /*
-      bm::header_id_t raHeaderID = phv->get_headers_size();
-      std::set<int> arithSet;
-      bm::HeaderType remoteAttestationHeaderType("remoteAttestation_h", raHeaderID);
-
-      remoteAttestationHeaderType.push_back_field("ra_registers", 32);
-      remoteAttestationHeaderType.push_back_field("ra_tables", 32);
-      remoteAttestationHeaderType.push_back_field("ra_program", 32);
-      //make PHVFactory, copy headers from current PHV, add new header, create new phv, set phv to packet
-      bm::PHVFactory newPHVFactory{};
-      for (bm::header_id_t h = 0; h < phv->get_headers_size(); h++) {
-        //push_back_header(header_name, header_index, header_type, bool metadata)
-        //bm::Header currentHeader = ;
-        newPHVFactory.push_back_header(phv->get_header(h).get_name(),
-                                       h,
-                                       phv->get_header(h).get_header_type(),
-                                       phv->get_header(h).is_metadata());
-      }
-      //The below for block is not fully implemented
-      bm::HeaderType dummyHeader("placeholder", 0); //deprecated argument
-      for (bm::header_stack_id_t hs = 0; hs < phv->get_header_stack_size(); hs++) {
-        //push_back_header_stack(name, index, type, headers)
-        bm::HeaderStack currentHeaderStack = phv->get_header_stack(hs);
-        std::vector<bm::header_id_t> hs_ids;
-        for(bm::header_id_t hsh = 0; hsh < currentHeaderStack.get_depth(); hsh++) {
-          hs_ids.push_back(currentHeaderStack.elements[hsh].get_id())
-        }
-        newPHVFactory->push_back_header_stack(currentHeaderStack.get_name(),
-                                              hs,
-                                              dummyHeader,
-                                              hs_ids);
-      }
-      newPHVFactory.push_back_header("remoteAttestation_h",
-                                     raHeaderID,
-                                     remoteAttestationHeaderType);
-      bm::PHVSourceIface *phv_source = get_phv_source();
-      phv_source->set_phv_factory(0u, &newPHVFactory);
-      std::unique_ptr<PHV> newPHV;
-      BMLOG_DEBUG("Create new PHV for RA");
-      newPHV = phv_source->get(0u);
-      BMLOG_DEBUG("Successfully extended PHV");
-      //newPHV->copy_header_stacks_unions(phv);
-      newPHV->get_field("remoteAttestation_h.ra_registers").set(ra_registers[0]);
-      newPHV->get_field("remoteAttestation_h.ra_tables").set(ra_registers[1]);
-      newPHV->get_field("remoteAttestation_h.ra_program").set(ra_registers[2]);
-      newPHV->set_packet_id(packet_id, 0u);
-      packet->set_phv(newPHV.get()); */
-    }
-
     deparser->deparse(packet.get());
+    char *packetDataEgress = packet->data();
+
+    if (isRARequest) {
+      // //Skipping straight to RA type to see if we're responding
+      // packetDataEgress += 8 + 6 + 6 + 2;
+      // unsigned char ihl = *packetDataEgress;
+      // ihl << 2;
+      // ihl >> 2;
+      // packetDataEgress += ihl * 4;
+      // unsigned char raType = *packetDataEgress;
+      // raType >> 6;
+      // if (raType == 2) isRAResponse = true;
+      //First offset = 8 + 6 + 6
+      // 64 bits for ethernet L1, 48 for dst MAC, 48 for src MAC, arrive at ethertype
+      packetDataEgress += 8 + 6 + 6;
+      unsigned short etype = *packetDataEgress;
+      if (etype == 32768) { // IPv4, 0x8000
+        //Grab the ihl value, to be used later
+        packetDataEgress += 2;
+        unsigned char ihl = *packetDataEgress;
+        /*Next shift is to proto field, crossing
+          8 bits for ver and ihl
+          6+2 bits for dscp and ecn
+          16 bits for length
+          16 bits for ID
+          16 bits for flags and frag offset
+          8 bits fot TTL
+        */
+        packetDataEgress += 1 + 1 + 2 + 2 + 2 + 1;
+        unsigned char proto = *packetDataEgress;
+        if (proto == 144) { //Remote Attestation, 0x90
+          //Next shift is to start of RA header, so must cover all of IPv4
+          //IHL is the size of the IPv4 header in 32 bit (4 byte) blocks
+          //9 bytes are already covered
+          //Must subtract off the value from version, which is the value 4
+          //in the upper 4 bits
+          packetDataEgress += (ihl - 64) * 4 - 9;
+          unsigned char raType = *packetDataEgress;
+          if (raType == 2) isRAResponse = true;
+        }
+      }
+    }
+
+    if (isRAResponse) {
+      packetDataEgress += 1;
+      uint32_t *registerPlacer = packetDataEgress;
+      *registerPlacer = ra_registers[0];
+      registerPlacer += 4;
+      *registerPlacer = ra_registers[1];
+      registerPlacer += 4;
+      *registerPlacer = ra_registers[2];
+    }
+
+
 
     // RECIRCULATE
     auto recirculate_flag = RegisterAccess::get_recirculate_flag(packet.get());
