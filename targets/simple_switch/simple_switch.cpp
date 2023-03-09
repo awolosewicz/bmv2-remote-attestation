@@ -513,6 +513,9 @@ SimpleSwitch::ingress_thread() {
     char *packetDataIngress = packet->data();
     //First offset = 8 + 6 + 6
     // 64 bits for ethernet L1, 48 for dst MAC, 48 for src MAC, arrive at ethertype
+    for (int i = 0; i < 20; i++) {
+      BMLOG_DEBUG_PKT(*packet, "Byte is value {}", *packetDataIngress)
+    }
     packetDataIngress += 8 + 6 + 6;
     unsigned short etype = *packetDataIngress;
     BMLOG_DEBUG_PKT(*packet, "Switch beginning pre-parse for RA");
