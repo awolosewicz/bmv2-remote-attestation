@@ -511,13 +511,14 @@ SimpleSwitch::ingress_thread() {
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
 
     char *packetDataIngress = packet->data();
-    //First offset = 8 + 6 + 6
-    // 64 bits for ethernet L1, 48 for dst MAC, 48 for src MAC, arrive at ethertype
-    for (int i = 0; i < 20; i++) {
-      BMLOG_DEBUG_PKT(*packet, "Byte is value {}", *(packetDataIngress + i));
-    }
-    packetDataIngress += 8 + 6 + 6;
-    unsigned short etype = *packetDataIngress;
+    //First offset = 6 + 6
+    //48 bits for dst MAC, 48 for src MAC, arrive at ethertype
+    //the first Layer 1 64 bits are not included in the packet data
+    //for (int i = 0; i < 20; i++) {
+    //  BMLOG_DEBUG_PKT(*packet, "Byte is value {}", *(packetDataIngress + i));
+    //}
+    packetDataIngress += 6 + 6;
+    unsigned short etype = *(unsigned short *)packetDataIngress;
     BMLOG_DEBUG_PKT(*packet, "Switch beginning pre-parse for RA");
     BMLOG_DEBUG_PKT(*packet, "Etype checked as {}", etype);
     if (etype == 32768) { // IPv4, 0x8000
@@ -787,7 +788,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       //First offset = 8 + 6 + 6
       // 64 bits for ethernet L1, 48 for dst MAC, 48 for src MAC, arrive at ethertype
       packetDataEgress += 8 + 6 + 6;
-      unsigned short etype = *packetDataEgress;
+      unsigned short etype = *(unsigned short *)packetDataEgress;
       if (etype == 32768) { // IPv4, 0x8000
         BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x8000");
         //Grab the ihl value, to be used later
