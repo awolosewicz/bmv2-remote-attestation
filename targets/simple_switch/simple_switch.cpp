@@ -515,7 +515,9 @@ SimpleSwitch::ingress_thread() {
     // 64 bits for ethernet L1, 48 for dst MAC, 48 for src MAC, arrive at ethertype
     packetDataIngress += 8 + 6 + 6;
     unsigned short etype = *packetDataIngress;
+    BMLOG_DEBUG_PKT(*packet, "Switch beginning pre-parse for RA");
     if (etype == 32768) { // IPv4, 0x8000
+      BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x800");
       //Grab the ihl value, to be used later
       packetDataIngress += 2;
       unsigned char ihl = *packetDataIngress;
@@ -530,6 +532,7 @@ SimpleSwitch::ingress_thread() {
       packetDataIngress += 1 + 1 + 2 + 2 + 2 + 1;
       unsigned char proto = *packetDataIngress;
       if (proto == 144) { //Remote Attestation, 0x90
+        BMLOG_DEBUG_PKT(*packet, "Switch found IP protocol 0x90");
         //Next shift is to start of RA header, so must cover all of IPv4
         //IHL is the size of the IPv4 header in 32 bit (4 byte) blocks
         //9 bytes are already covered
@@ -537,7 +540,10 @@ SimpleSwitch::ingress_thread() {
         //in the upper 4 bits
         packetDataIngress += (ihl - 64) * 4 - 9;
         unsigned char raType = *packetDataIngress;
-        if (raType == 1) isRARequest = true;
+        if (raType == 1) {
+          BMLOG_DEBUG_PKT(*packet, "Switch found RA type Request");
+          isRARequest = true;
+        }
       }
     }
 
@@ -764,6 +770,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     char *packetDataEgress = packet->data();
 
     if (isRARequest) {
+      BMLOG_DEBUG_PKT(*packet, "Switch beginning RA post-deparse value setting");
       // //Skipping straight to RA type to see if we're responding
       // packetDataEgress += 8 + 6 + 6 + 2;
       // unsigned char ihl = *packetDataEgress;
@@ -778,6 +785,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       packetDataEgress += 8 + 6 + 6;
       unsigned short etype = *packetDataEgress;
       if (etype == 32768) { // IPv4, 0x8000
+        BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x8000");
         //Grab the ihl value, to be used later
         packetDataEgress += 2;
         unsigned char ihl = *packetDataEgress;
@@ -792,6 +800,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         packetDataEgress += 1 + 1 + 2 + 2 + 2 + 1;
         unsigned char proto = *packetDataEgress;
         if (proto == 144) { //Remote Attestation, 0x90
+          BMLOG_DEBUG_PKT(*packet, "Switch found IP protocol 0x90");
           //Next shift is to start of RA header, so must cover all of IPv4
           //IHL is the size of the IPv4 header in 32 bit (4 byte) blocks
           //9 bytes are already covered
@@ -799,12 +808,16 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           //in the upper 4 bits
           packetDataEgress += (ihl - 64) * 4 - 9;
           unsigned char raType = *packetDataEgress;
-          if (raType == 2) isRAResponse = true;
+          if (raType == 2) {
+            BMLOG_DEBUG_PKT(*packet, "Switch found RA type Response");
+            isRAResponse = true;
+          }
         }
       }
     }
 
     if (isRAResponse) {
+      BMLOG_DEBUG_PKT(*packet, "Setting Packet RA Values - Registers: {}, Tables: {}, Program: {}", ra_registers[0], ra_registers[1], ra_registers[2]);
       packetDataEgress += 1;
       uint32_t *registerPlacer = (uint32_t *)packetDataEgress;
       *registerPlacer = ra_registers[0];
