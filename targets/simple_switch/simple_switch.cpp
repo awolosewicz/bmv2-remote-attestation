@@ -521,7 +521,7 @@ SimpleSwitch::ingress_thread() {
     unsigned short etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
     BMLOG_DEBUG_PKT(*packet, "Switch beginning pre-parse for RA");
     BMLOG_DEBUG_PKT(*packet, "Etype checked as {}", etype);
-    if (etype == 32768) { // IPv4, 0x8000
+    if (etype == 2048) { // IPv4, 0x0800
       BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x800");
       //Grab the ihl value, to be used later
       packetDataIngress += 2;
@@ -789,7 +789,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       //48 bits for dst MAC, 48 for src MAC, arrive at ethertype
       packetDataEgress += 6 + 6;
       unsigned short etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
-      if (etype == 32768) { // IPv4, 0x8000
+      if (etype == 2048) { // IPv4, 0x0800
         BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x8000");
         //Grab the ihl value, to be used later
         packetDataEgress += 2;
