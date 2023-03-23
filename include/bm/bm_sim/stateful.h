@@ -51,6 +51,7 @@
 namespace bm {
 
 class RegisterArray;  // forward declaration
+class P4Objects;
 
 //! A Register object is essentially just a Data object, meant to live in a
 //! RegisterArray. Use the Data class methods to read and write to a Register.
