@@ -451,7 +451,8 @@ class register_write
     unsigned char md5[16];
     for (auto top_it = dst.get_p4objects().get_register_arrays_begin(); top_it != dst.get_p4objects().get_register_arrays_end(); top_it++) {
       for (auto it = top_it->second->begin(); it != top_it->second->end(); it++) {
-        MD5_Update(&ctx, &(it->get_uint64()), sizeof(uint64_t));
+        std::string tempstr = it->get_string_repr();
+        MD5_Update(&ctx, tempstr.data(), tempstr.size());
       }
     }
     MD5_Final(md5, &ctx);
