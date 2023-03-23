@@ -163,6 +163,14 @@ class Context final {
     return p4objects->get_action(table_name, action_name)->get_id();
   }
 
+  std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_begin_() {
+    return p4objects->get_register_arrays_begin();
+  }
+
+  std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_end_() {
+    return p4objects->get_register_arrays_end();
+  }
+
  private:
   // ---------- runtime interfaces ----------
 

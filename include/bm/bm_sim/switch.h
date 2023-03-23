@@ -768,9 +768,24 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   register_write(cxt_id_t cxt_id,
                  const std::string &register_name,
                  const size_t idx, Data value) override {
-
-    return contexts.at(cxt_id).register_write(
+    RegisterErrorCode toReturn = contexts.at(cxt_id).register_write(
         register_name, idx, std::move(value));
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    unsigned char md5[16];
+    for (auto top_it = contexts.at(cxt_id).get_register_arrays_begin_();
+              top_it != contexts.at(cxt_id).get_register_arrays_end()_;
+              top_it++) {
+      for (auto it = top_it->second->begin();
+                it != top_it->second->end();
+                it++) {
+        std::string tempstr = it->get_string_repr();
+        MD5_Update(&ctx, tempstr.data(), tempstr.size());
+      }
+    }
+    MD5_Final(md5, &ctx);
+    update_ra_registers(md5, 0);
+    return toReturn;
   }
 
   RegisterErrorCode
@@ -778,8 +793,24 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
                        const std::string &register_name,
                        const size_t start, const size_t end,
                        Data value) override {
-    return contexts.at(cxt_id).register_write_range(
+    RegisterErrorCode toReturn = contexts.at(cxt_id).register_write_range(
         register_name, start, end, std::move(value));
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    unsigned char md5[16];
+    for (auto top_it = contexts.at(cxt_id).get_register_arrays_begin_();
+              top_it != contexts.at(cxt_id).get_register_arrays_end()_;
+              top_it++) {
+      for (auto it = top_it->second->begin();
+                it != top_it->second->end();
+                it++) {
+        std::string tempstr = it->get_string_repr();
+        MD5_Update(&ctx, tempstr.data(), tempstr.size());
+      }
+    }
+    MD5_Final(md5, &ctx);
+    update_ra_registers(md5, 0);
+    return toReturn;
   }
 
   RegisterErrorCode
