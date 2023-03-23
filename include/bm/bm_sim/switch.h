@@ -774,7 +774,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
     MD5_Init(&ctx);
     unsigned char md5[16];
     for (auto top_it = contexts.at(cxt_id).get_register_arrays_begin_();
-              top_it != contexts.at(cxt_id).get_register_arrays_end()_;
+              top_it != contexts.at(cxt_id).get_register_arrays_end_();
               top_it++) {
       for (auto it = top_it->second->begin();
                 it != top_it->second->end();
@@ -799,7 +799,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
     MD5_Init(&ctx);
     unsigned char md5[16];
     for (auto top_it = contexts.at(cxt_id).get_register_arrays_begin_();
-              top_it != contexts.at(cxt_id).get_register_arrays_end()_;
+              top_it != contexts.at(cxt_id).get_register_arrays_end_();
               top_it++) {
       for (auto it = top_it->second->begin();
                 it != top_it->second->end();
