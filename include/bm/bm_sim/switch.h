@@ -83,6 +83,8 @@
 #include "lookup_structures.h"
 #include "target_parser.h"
 
+#include <src/bm_sim/md5.h>
+
 namespace bm {
 
 class OptionsParser;
@@ -281,6 +283,13 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   //! created and blocks until all existing Packet instances have been
   //! destroyed in all contexts
   void block_until_no_more_packets();
+
+  void update_ra_registers(unsigned char *val, unsigned int idx) {
+    idx *= 16; //0-15 for registers, 16-31 for tables, 32-48 for program
+    for (int i = 0; i < 16; i++) {
+      ra_registers[idx+i] = val[i];
+    }
+  }
 
   //! Construct and return a Packet instance for the given \p cxt_id.
   std::unique_ptr<Packet> new_packet_ptr(cxt_id_t cxt_id, port_t ingress_port,
@@ -756,6 +765,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   register_write(cxt_id_t cxt_id,
                  const std::string &register_name,
                  const size_t idx, Data value) override {
+
     return contexts.at(cxt_id).register_write(
         register_name, idx, std::move(value));
   }
@@ -904,10 +914,12 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
 
  private:
   size_t nb_cxts{};
+  static constexpr size_t nb_ra_registers = 3;
   // TODO(antonin)
   // Context is not-movable, but is default-constructible, so I can put it in a
   // std::vector
   std::vector<Context> contexts{};
+  unsigned char ra_registers[16*nb_ra_registers];
 
   LookupStructureFactory *get_lookup_factory() const {
     return lookup_factory ? lookup_factory.get() : &default_lookup_factory;
