@@ -233,9 +233,9 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   add_required_field("standard_metadata", "ra_tables");
   add_required_field("standard_metadata", "ra_program");
 
-  ra_registers[0] = 1111;
-  ra_registers[1] = 2222;
-  ra_registers[2] = 3333;
+  for (int q = 0; q < nb_ra_registers * 16; q ++) {
+    if (q % 2) ra_registers[q] = UCHAR_MAX;
+  }
 
   force_arith_header("standard_metadata");
   force_arith_header("queueing_metadata");
@@ -822,38 +822,36 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     if (isRAResponse) {
-      BMLOG_DEBUG_PKT(*packet, "Setting Packet RA Values - Registers: {}, Tables: {}, Program: {}", ra_registers[0], ra_registers[1], ra_registers[2]);
+      BMLOG_DEBUG_PKT(*packet, "Setting Packet RA Values");
       packetDataEgress += 1;
-      for(int q = 0; q < 3; q++) {
-        uint32_t tempval = ra_registers[q];
-        //tempval >> 24;
-        *packetDataEgress = (char)(tempval >> 24);
-        packetDataEgress += 1;
+      // for(int q = 0; q < 3; q++) {
+      //   uint32_t tempval = ra_registers[q];
+      //   //tempval >> 24;
+      //   *packetDataEgress = (char)(tempval >> 24);
+      //   packetDataEgress += 1;
 
-        tempval = ra_registers[q];
-        //tempval << 8;
-        //tempval >> 24;
-        *packetDataEgress = (char)((tempval << 8) >> 24);
-        packetDataEgress += 1;
+      //   tempval = ra_registers[q];
+      //   //tempval << 8;
+      //   //tempval >> 24;
+      //   *packetDataEgress = (char)((tempval << 8) >> 24);
+      //   packetDataEgress += 1;
 
-        tempval = ra_registers[q];
-        //tempval << 16;
-        //tempval >> 24;
-        *packetDataEgress = (char)((tempval << 16) >> 24);
-        packetDataEgress += 1;
+      //   tempval = ra_registers[q];
+      //   //tempval << 16;
+      //   //tempval >> 24;
+      //   *packetDataEgress = (char)((tempval << 16) >> 24);
+      //   packetDataEgress += 1;
 
-        tempval = ra_registers[q];
-        //tempval << 24;
-        //tempval >> 24;
-        *packetDataEgress = (char)((tempval << 24) >> 24);
-        packetDataEgress += 1;
+      //   tempval = ra_registers[q];
+      //   //tempval << 24;
+      //   //tempval >> 24;
+      //   *packetDataEgress = (char)((tempval << 24) >> 24);
+      //   packetDataEgress += 1;
+      // }
+      for(int q = 0; q < nb_ra_registers * 16; q++) {
+        *packetDataEgress = ra_registers[q];
+        packetDataEgress
       }
-      //uint32_t *registerPlacer = (uint32_t *)packetDataEgress;
-      //*registerPlacer = ra_registers[0];
-      //registerPlacer += 4;
-      //*registerPlacer = ra_registers[1];
-      //registerPlacer += 4;
-      //*registerPlacer = ra_registers[2];
     }
 
 
