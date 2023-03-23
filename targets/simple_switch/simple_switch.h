@@ -79,7 +79,7 @@ class SimpleSwitch : public Switch {
   };
 
   static constexpr port_t default_drop_port = 511;
-  static constexpr size_t nb_ra_registers = 4u;
+  static constexpr size_t nb_ra_registers = 3;
 
  private:
   using clock = std::chrono::high_resolution_clock;
@@ -112,6 +112,13 @@ class SimpleSwitch : public Switch {
 
   int set_egress_queue_rate(size_t port, const uint64_t rate_pps);
   int set_all_egress_queue_rates(const uint64_t rate_pps);
+
+  void update_ra_registers(unsigned char *val, unsigned int idx) {
+    idx *= 16; //0-15 for registers, 16-31 for tables, 32-48 for program
+    for (int i = 0; i < 16; i++) {
+      ra_registers[idx+i] = val[i];
+    }
+  }
 
   // returns the number of microseconds elapsed since the switch started
   uint64_t get_time_elapsed_us() const;
@@ -187,7 +194,8 @@ class SimpleSwitch : public Switch {
   port_t drop_port;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
-  std::array<uint32_t, nb_ra_registers> ra_registers;
+  //std::array<uint32_t, nb_ra_registers> ra_registers;
+  unsigned char ra_registers[16*nb_ra_registers];
   bool isRARequest = false;
   bool isRAResponse = false;
   // for these queues, the write operation is non-blocking and we drop the

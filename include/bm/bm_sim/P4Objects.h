@@ -222,6 +222,14 @@ class P4Objects {
     return register_arrays.at(name).get();
   }
 
+  std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_begin() {
+    return register_arrays.begin();
+  }
+
+  std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_end() {
+    return register_arrays.end();
+  }
+
   RegisterArray *get_register_array_rt(const std::string &name) const;
 
   NamedCalculation *get_named_calculation(const std::string &name) const {
