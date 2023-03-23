@@ -46,7 +46,6 @@
 #include "data.h"
 #include "bignum.h"
 #include "named_p4object.h"
-#include "P4Objects.h"
 #include "short_alloc.h"
 
 namespace bm {
