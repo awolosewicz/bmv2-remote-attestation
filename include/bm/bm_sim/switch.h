@@ -284,6 +284,9 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   //! destroyed in all contexts
   void block_until_no_more_packets();
 
+  //! Remote Attestation Registers and Functions
+  static constexpr size_t nb_ra_registers = 3;
+  unsigned char ra_registers[16*nb_ra_registers];
   void update_ra_registers(unsigned char *val, unsigned int idx) {
     idx *= 16; //0-15 for registers, 16-31 for tables, 32-48 for program
     for (int i = 0; i < 16; i++) {
@@ -914,12 +917,10 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
 
  private:
   size_t nb_cxts{};
-  static constexpr size_t nb_ra_registers = 3;
   // TODO(antonin)
   // Context is not-movable, but is default-constructible, so I can put it in a
   // std::vector
   std::vector<Context> contexts{};
-  unsigned char ra_registers[16*nb_ra_registers];
 
   LookupStructureFactory *get_lookup_factory() const {
     return lookup_factory ? lookup_factory.get() : &default_lookup_factory;

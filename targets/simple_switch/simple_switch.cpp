@@ -233,7 +233,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   add_required_field("standard_metadata", "ra_tables");
   add_required_field("standard_metadata", "ra_program");
 
-  for (int q = 0; q < nb_ra_registers * 16; q ++) {
+  for (int q = 0; q < (int)(nb_ra_registers * 16); q ++) {
     if (q % 2) ra_registers[q] = UCHAR_MAX;
   }
 
