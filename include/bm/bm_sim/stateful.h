@@ -104,7 +104,7 @@ class RegisterArray : public NamedP4Object {
   using Notifier = std::function<void(size_t idx)>;
 
   RegisterArray(const std::string &name, p4object_id_t id,
-                size_t size, int bitwidth);
+                size_t size, int bitwidth, P4Objects *parent);
 
   //! Access the register at position \p idx, asserts if bad \p idx
   Register &operator[](size_t idx) {
