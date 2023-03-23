@@ -784,6 +784,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
       }
     }
     MD5_Final(md5, &ctx);
+
     update_ra_registers(md5, 0);
     return toReturn;
   }

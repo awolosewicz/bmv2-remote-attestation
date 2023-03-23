@@ -164,11 +164,11 @@ class Context final {
   }
 
   std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_begin_() {
-    return p4objects->get_register_arrays_begin();
+    return p4objects_rt->get_register_arrays_begin();
   }
 
   std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_end_() {
-    return p4objects->get_register_arrays_end();
+    return p4objects_rt->get_register_arrays_end();
   }
 
  private:
