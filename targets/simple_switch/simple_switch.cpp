@@ -519,6 +519,8 @@ SimpleSwitch::ingress_thread() {
     //}
     packetDataIngress += 6 + 6;
     unsigned short etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
+    isRARequest = false;
+    isRAResponse = false;
     BMLOG_DEBUG_PKT(*packet, "Switch beginning pre-parse for RA");
     BMLOG_DEBUG_PKT(*packet, "Etype checked as {}", etype);
     if (etype == 2048) { // IPv4, 0x0800
