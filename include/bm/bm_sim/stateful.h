@@ -46,6 +46,7 @@
 #include "data.h"
 #include "bignum.h"
 #include "named_p4object.h"
+#include "P4Objects.h"
 #include "short_alloc.h"
 
 namespace bm {
@@ -148,6 +149,8 @@ class RegisterArray : public NamedP4Object {
 
   void reset_state();
 
+  P4Objects &get_p4objects() const { return *p4objects; }
+
   //! Register your own notifier function. Every time a write operation is
   //! performed on the register array, your notifier will be called, with the
   //! index at which the write happened as an argument. This method is not
@@ -167,6 +170,7 @@ class RegisterArray : public NamedP4Object {
   void notify(const Register &reg) const;
 
   std::vector<Register> registers{};
+  P4Objects *p4objects{nullptr};
   mutable std::mutex m_mutex{};
   int bitwidth{};
   std::vector<Notifier> notifiers{};

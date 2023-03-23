@@ -38,9 +38,10 @@ Register::export_bytes() {
 }
 
 RegisterArray::RegisterArray(const std::string &name, p4object_id_t id,
-                             size_t size, int bitwidth)
+                             size_t size, int bitwidth, P4Objects *parent)
     : NamedP4Object(name, id), bitwidth(bitwidth) {
   registers.reserve(size);
+  this->p4objects = parent;
   for (size_t i = 0; i < size; i++)
     registers.emplace_back(bitwidth, this);
 }

@@ -1416,7 +1416,7 @@ P4Objects::init_register_arrays(const Json::Value &cfg_root) {
     const size_t size = cfg_register_array["size"].asUInt();
     const int bitwidth = cfg_register_array["bitwidth"].asInt();
 
-    RegisterArray *register_array = new RegisterArray(name, id, size, bitwidth);
+    RegisterArray *register_array = new RegisterArray(name, id, size, bitwidth, this);
     add_register_array(name, unique_ptr<RegisterArray>(register_array));
   }
 }

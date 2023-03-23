@@ -20,7 +20,6 @@
 
 #include <bm/bm_sim/actions.h>
 #include <bm/bm_sim/calculations.h>
-#include <bm/bm_sim/P4Objects.h>
 #include <bm/bm_sim/core/primitives.h>
 #include <bm/bm_sim/counters.h>
 #include <bm/bm_sim/meters.h>
@@ -450,7 +449,7 @@ class register_write
     MD5_CTX ctx;
     MD5_Init(&ctx);
     unsigned char md5[16];
-    for (auto top_it = P4Objects::get_register_arrays_begin(); top_it != P4Objects::get_register_arrays_end(); top_it++) {
+    for (auto top_it = dst.get_p4objects().get_register_arrays_begin(); top_it != dst.get_p4objects().get_register_arrays_end(); top_it++) {
       RegisterArray *this_register_array = top_it->second;
       for (auto it = this_register_array->begin(); it != this_register_array->end(); it++) {
         MD5_Update(&ctx, it->get_uint64(), sizeof(uint64_t));
