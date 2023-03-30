@@ -2545,7 +2545,7 @@ class RuntimeAPI(cmd.Cmd):
         self.client.bm_reset_state()
 
     @handle_bad_input
-    def do_get_ra_data(self):
+    def do_get_ra_data(self, line):
         "Read Remote Attestation Data"
         ra_data = self.client.bm_get_ra_data()
         for q in range(3):
@@ -2556,7 +2556,7 @@ class RuntimeAPI(cmd.Cmd):
             elif q == 2:
                 print("Program: ", end="")
             for r in range(16):
-                print("{}".format(ra_data[q], '02X'), end="")
+                print("{}".format(ra_data[r+q*16], '02X'), end="")
             print("")
 
     @handle_bad_input
