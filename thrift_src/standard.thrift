@@ -714,9 +714,9 @@ service Standard {
 
   void bm_reset_state()
 
+  string bm_get_ra_data()
   string bm_get_config()
   string bm_get_config_md5()
-  string bm_get_ra_data()
 
   i32 bm_get_id_from_name(
     1:i32 cxt_id,
