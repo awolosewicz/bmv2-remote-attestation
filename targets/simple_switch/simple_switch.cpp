@@ -854,7 +854,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       //   *packetDataEgress = (char)((tempval << 24) >> 24);
       //   packetDataEgress += 1;
       // }
-      for(int q = 0; q < nb_ra_registers * 16; q++) {
+      for(int q = 0; q < (int)(nb_ra_registers * 16); q++) {
         *packetDataEgress = ra_registers[q];
         packetDataEgress += 1;
       }
