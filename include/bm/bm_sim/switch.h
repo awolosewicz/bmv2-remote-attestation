@@ -334,6 +334,29 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
 
   // ---------- RuntimeInterface ----------
 
+  void
+  ra_hash_tables(cxt_id_t cxt_id) {
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    unsigned char md5[16];
+    for (auto top_it = contexts.at(cxt_id).get_mts_begin_();
+              top_it != contexts.at(cxt_id).get_mts_end_();
+              top_it++) {
+      auto abstract_table = top_it->second->get_match_table();
+      auto table = dynamic_cast<MatchTable *>(abstract_table);
+      std::vector<bm::MatchTable::Entry> entries = table->get_entries();
+      for (auto it = entries.begin(); it != entries.end(); it++) {
+        bm::ActionData action_data = it->action_data;
+        for (int q = 0; q < (int)action_data.size(); q++) {
+          std::string tempstr = action_data.get(q).get_string_repr();
+          MD5_Update(&ctx, tempstr.data(), tempstr.size());
+        }
+      }
+    }
+    MD5_Final(md5, &ctx);
+    update_ra_registers(md5, 1);
+  }
+
   MatchErrorCode
   mt_get_num_entries(cxt_id_t cxt_id,
                      const std::string &table_name,
@@ -345,8 +368,10 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   mt_clear_entries(cxt_id_t cxt_id,
                    const std::string &table_name,
                    bool reset_default_entry) override {
-    return contexts.at(cxt_id).mt_clear_entries(table_name,
+    MatchErrorCode toReturn =  contexts.at(cxt_id).mt_clear_entries(table_name,
                                                 reset_default_entry);
+    ra_hash_tables();
+    return toReturn;
   }
 
   MatchErrorCode
@@ -357,9 +382,11 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
                ActionData action_data,
                entry_handle_t *handle,
                int priority = -1  /*only used for ternary*/) override {
-    return contexts.at(cxt_id).mt_add_entry(
+    MatchErrorCode toReturn = contexts.at(cxt_id).mt_add_entry(
         table_name, match_key, action_name,
         std::move(action_data), handle, priority);
+    ra_hash_tables();
+    return toReturn;
   }
 
   MatchErrorCode
@@ -367,21 +394,27 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
                         const std::string &table_name,
                         const std::string &action_name,
                         ActionData action_data) override {
-    return contexts.at(cxt_id).mt_set_default_action(
+    MatchErrorCode toReturn = contexts.at(cxt_id).mt_set_default_action(
         table_name, action_name, std::move(action_data));
+    ra_hash_tables();
+    return toReturn;
   }
 
   MatchErrorCode
   mt_reset_default_entry(cxt_id_t cxt_id,
                          const std::string &table_name) override {
-    return contexts.at(cxt_id).mt_reset_default_entry(table_name);
+    MatchErrorCode toReturn = contexts.at(cxt_id).mt_reset_default_entry(table_name);
+    ra_hash_tables();
+    return toReturn;
   }
 
   MatchErrorCode
   mt_delete_entry(cxt_id_t cxt_id,
                   const std::string &table_name,
                   entry_handle_t handle) override {
-    return contexts.at(cxt_id).mt_delete_entry(table_name, handle);
+    MatchErrorCode toReturn = contexts.at(cxt_id).mt_delete_entry(table_name, handle);
+    ra_hash_tables();
+    return toReturn;
   }
 
   MatchErrorCode
@@ -390,8 +423,10 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
                   entry_handle_t handle,
                   const std::string &action_name,
                   ActionData action_data) override {
-    return contexts.at(cxt_id).mt_modify_entry(
+    MatchErrorCode toReturn = contexts.at(cxt_id).mt_modify_entry(
         table_name, handle, action_name, std::move(action_data));
+    ra_hash_tables();
+    return toReturn;
   }
 
   MatchErrorCode
@@ -399,7 +434,9 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
                    const std::string &table_name,
                    entry_handle_t handle,
                    unsigned int ttl_ms) override {
-    return contexts.at(cxt_id).mt_set_entry_ttl(table_name, handle, ttl_ms);
+    MatchErrorCode toReturn = contexts.at(cxt_id).mt_set_entry_ttl(table_name, handle, ttl_ms);
+    ra_hash_tables();
+    return toReturn;
   }
 
   // action profiles

@@ -192,6 +192,14 @@ class P4Objects {
     return match_action_tables_map.at(name).get();
   }
 
+  std::unordered_map<std::string, std::unique_ptr<MatchActionTable> >::iterator get_mts_begin() {
+    return match_action_tables_map.begin();
+  }
+
+  std::unordered_map<std::string, std::unique_ptr<MatchActionTable> >::iterator get_mts_end() {
+    return match_action_tables_map.end();
+  }
+
   Conditional *get_conditional(const std::string &name) const {
     return conditionals_map.at(name).get();
   }

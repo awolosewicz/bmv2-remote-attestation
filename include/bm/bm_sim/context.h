@@ -163,6 +163,14 @@ class Context final {
     return p4objects->get_action(table_name, action_name)->get_id();
   }
 
+  std::unordered_map<std::string, std::unique_ptr<MatchActionTable> >::iterator get_mts_begin_() {
+    return p4objects_rt->get_mts_begin();
+  }
+
+  std::unordered_map<std::string, std::unique_ptr<MatchActionTable> >::iterator get_mts_end_() {
+    return p4objects_rt->get_mts_end();
+  }
+
   std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_begin_() {
     return p4objects_rt->get_register_arrays_begin();
   }
