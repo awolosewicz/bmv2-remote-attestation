@@ -368,7 +368,7 @@ SwitchWContexts::swap_configs() {
     _BM_UNUSED(error);
     assert(!error);
   }
-  update_ra_registers(get_config_md5_chars(), 2)
+  update_ra_registers(get_config_md5_chars(), 2);
   config_loaded_cv.notify_one();
   return ErrorCode::SUCCESS;
 }
