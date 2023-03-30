@@ -164,19 +164,19 @@ class Context final {
   }
 
   std::unordered_map<std::string, std::unique_ptr<MatchActionTable> >::iterator get_mts_begin_() {
-    return p4objects_rt->get_mts_begin();
+    return p4objects->get_mts_begin();
   }
 
   std::unordered_map<std::string, std::unique_ptr<MatchActionTable> >::iterator get_mts_end_() {
-    return p4objects_rt->get_mts_end();
+    return p4objects->get_mts_end();
   }
 
   std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_begin_() {
-    return p4objects_rt->get_register_arrays_begin();
+    return p4objects->get_register_arrays_begin();
   }
 
   std::unordered_map<std::string, std::unique_ptr<RegisterArray> >::iterator get_register_arrays_end_() {
-    return p4objects_rt->get_register_arrays_end();
+    return p4objects->get_register_arrays_end();
   }
 
  private:
