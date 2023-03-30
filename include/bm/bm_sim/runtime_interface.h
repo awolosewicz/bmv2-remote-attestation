@@ -382,6 +382,9 @@ class RuntimeInterface {
   swap_configs() = 0;
 
   virtual std::string
+  get_ra_data() const = 0;
+
+  virtual std::string
   get_config() const = 0;
 
   virtual std::string

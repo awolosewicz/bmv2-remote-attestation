@@ -297,7 +297,7 @@ exception InvalidIdLookup {
 }
 
 service Standard {
-	
+
   // table operations
 
   // works for direct and indirect tables
@@ -600,7 +600,7 @@ service Standard {
   ) throws (1:InvalidSwapOperation ouch),
 
   void bm_swap_configs() throws (1:InvalidSwapOperation ouch),
-  
+
   // meters
 
   void bm_meter_array_set_rates(
@@ -716,6 +716,7 @@ service Standard {
 
   string bm_get_config()
   string bm_get_config_md5()
+  string bm_get_ra_data()
 
   i32 bm_get_id_from_name(
     1:i32 cxt_id,

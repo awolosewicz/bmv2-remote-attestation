@@ -2018,6 +2018,21 @@ class RuntimeAPI(cmd.Cmd):
         return self._complete_res(COUNTER_ARRAYS, text)
 
     @handle_bad_input
+    def do_get_ra_data(self):
+        "Read Remote Attestation Data"
+        ra_data = self.client.bm_get_ra_data()
+        for q in range(3):
+            if q == 0:
+                print "Registers: ", end=""
+            elif q == 1:
+                print "Tables: ", end=""
+            elif q == 2:
+                print "Program: ", end=""
+            for r in range(16):
+                print "{}".format(ra_data[q], '02X'), end=""
+            print ""
+
+    @handle_bad_input
     def do_register_read(self, line):
         "Read register value: register_read <name> [index]"
         args = line.split()

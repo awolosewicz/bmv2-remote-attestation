@@ -1178,6 +1178,11 @@ public:
     switch_->reset_state();
   }
 
+  void bm_get_ra_data(std::string& _return) {
+    Logger::get()->trace("bm_get_ra_data");
+    _return.append(switch_->get_ra_data());
+  }
+
   void bm_get_config(std::string& _return) {
     Logger::get()->trace("bm_get_config");
     _return.append(switch_->get_config());
