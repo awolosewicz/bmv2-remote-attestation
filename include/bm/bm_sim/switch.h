@@ -892,7 +892,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   RuntimeInterface::ErrorCode
   swap_configs() override;
 
-  std::string get_ra_data() const override {
+  std::string get_ra_data() override {
     return std::string(reinterpret_cast<char *>(ra_registers), sizeof(ra_registers));
   }
   std::string get_config() const override;
