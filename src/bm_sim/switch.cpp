@@ -368,7 +368,7 @@ SwitchWContexts::swap_configs() {
     _BM_UNUSED(error);
     assert(!error);
   }
-  update_ra_registers(get_config_md5(), 2)
+  update_ra_registers(get_config_md5_chars(), 2)
   config_loaded_cv.notify_one();
   return ErrorCode::SUCCESS;
 }
@@ -499,9 +499,25 @@ SwitchWContexts::get_config_md5_() const {
 }
 
 std::string
+SwitchWContexts::get_config_md5_chars_() const {
+  MD5_CTX cxt;
+  MD5_Init(&cxt);
+  MD5_Update(&cxt, current_config.data(), current_config.size());
+  unsigned char md5[16];
+  MD5_Final(md5, &cxt);
+  return md5;
+}
+
+std::string
 SwitchWContexts::get_config_md5() const {
   std::unique_lock<std::mutex> config_lock(config_mutex);
   return get_config_md5_();
+}
+
+std::string
+SwitchWContexts::get_config_md5_chars() const {
+  std::unique_lock<std::mutex> config_lock(config_mutex);
+  return get_config_md5_chars_();
 }
 
 P4Objects::IdLookupErrorCode

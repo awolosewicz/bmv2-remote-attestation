@@ -236,7 +236,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   for (int q = 0; q < 32; q ++) {
     if (q % 2) ra_registers[q] = UCHAR_MAX;
   }
-  std::string currProgMD5 = get_config_md5();
+  std::string currProgMD5 = get_config_md5_chars();
   for (int q = 32; q < 48; q++) {
     ra_registers[q] = currProgMD5[q];
   }
