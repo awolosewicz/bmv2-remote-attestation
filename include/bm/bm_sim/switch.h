@@ -894,7 +894,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
 
   std::string get_config() const override;
   std::string get_config_md5() const override;
-  std::string get_config_md5_chars() const override;
+  unsigned char* get_config_md5_chars() const;
 
   P4Objects::IdLookupErrorCode p4objects_id_from_name(
       cxt_id_t cxt_id, P4Objects::ResourceType type, const std::string &name,
@@ -998,7 +998,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
 
   // internal version of get_config_md5(), which does not acquire config_lock
   std::string get_config_md5_() const;
-  std::string get_config_md5_chars_() const;
+  unsigned char* get_config_md5_chars_() const;
 
   // Create an instance of the default lookup factory
   static LookupStructureFactory default_lookup_factory;

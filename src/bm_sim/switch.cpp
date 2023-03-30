@@ -498,7 +498,7 @@ SwitchWContexts::get_config_md5_() const {
   return std::string(reinterpret_cast<char *>(md5), sizeof(md5));
 }
 
-std::string
+unsigned char*
 SwitchWContexts::get_config_md5_chars_() const {
   MD5_CTX cxt;
   MD5_Init(&cxt);
@@ -514,7 +514,7 @@ SwitchWContexts::get_config_md5() const {
   return get_config_md5_();
 }
 
-std::string
+unsigned char*
 SwitchWContexts::get_config_md5_chars() const {
   std::unique_lock<std::mutex> config_lock(config_mutex);
   return get_config_md5_chars_();
