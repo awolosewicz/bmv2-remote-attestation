@@ -233,19 +233,13 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   add_required_field("standard_metadata", "ra_tables");
   add_required_field("standard_metadata", "ra_program");
 
-  for (int q = 0; q < 32; q ++) {
-    if (q % 2) ra_registers[q] = UCHAR_MAX;
-  }
-  std::string currProgMD5 = get_config_md5();
-  for (int q = 32; q < 48; q++) {
-    ra_registers[q] = currProgMD5[q];
-  }
-
   force_arith_header("standard_metadata");
   force_arith_header("queueing_metadata");
   force_arith_header("intrinsic_metadata");
 
   import_primitives(this);
+
+  init_ra_registers();
 }
 
 int
@@ -271,6 +265,9 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // each add_header / remove_header primitive call
   packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
   phv->get_field("standard_metadata.packet_length").set(len);
+  phv->get_field("standard_metadata.ra_registers").set(std::string(reinterpret_cast<char *>(&ra_registers[0]), 16));
+  phv->get_field("standard_metadata.ra_tables").set(std::string(reinterpret_cast<char *>(&ra_registers[16]), 16));
+  phv->get_field("standard_metadata.ra_program").set(std::string(reinterpret_cast<char *>(&ra_registers[32]), 16));
   Field &f_instance_type = phv->get_field("standard_metadata.instance_type");
   f_instance_type.set(PKT_INSTANCE_TYPE_NORMAL);
 
@@ -523,38 +520,25 @@ SimpleSwitch::ingress_thread() {
     //}
     packetDataIngress += 6 + 6;
     unsigned short etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
-    isRARequest = false;
-    isRAResponse = false;
-    BMLOG_DEBUG_PKT(*packet, "Switch beginning pre-parse for RA");
-    BMLOG_DEBUG_PKT(*packet, "Etype checked as {}", etype);
-    if (etype == 2048) { // IPv4, 0x0800
-      BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x800");
-      //Grab the ihl value, to be used later
-      packetDataIngress += 2;
-      unsigned char ihl = *packetDataIngress;
-      /*Next shift is to proto field, crossing
-        8 bits for ver and ihl
-        6+2 bits for dscp and ecn
-        16 bits for length
-        16 bits for ID
-        16 bits for flags and frag offset
-        8 bits fot TTL
-      */
-      packetDataIngress += 1 + 1 + 2 + 2 + 2 + 1;
-      unsigned char proto = *packetDataIngress;
-      if (proto == 144) { //Remote Attestation, 0x90
-        BMLOG_DEBUG_PKT(*packet, "Switch found IP protocol 0x90");
-        //Next shift is to start of RA header, so must cover all of IPv4
-        //IHL is the size of the IPv4 header in 32 bit (4 byte) blocks
-        //9 bytes are already covered
-        //Must subtract off the value from version, which is the value 4
-        //in the upper 4 bits
-        packetDataIngress += (ihl - 64) * 4 - 9;
-        unsigned char raType = *packetDataIngress;
-        if (raType == 1) {
-          BMLOG_DEBUG_PKT(*packet, "Switch found RA type Request");
-          isRARequest = true;
-        }
+    BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse");
+    if (etype == 34984) { // 802.1Q double, 0x88A8
+      BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q double");
+      packetDataIngress += 8;
+    }
+    else if (etype == 33024) { // 802.1Q single, 0x8100
+      BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q single");
+      packetDataIngress += 4;
+    }
+    etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
+    packetDataIngress += 2;
+    if (etype == 34525) { // IPv6, 0x86DD
+      BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 ethertype");
+      isIPv6 = true;
+      packetDataIngress += 6; // ver(4) + class(8) + flow (20) + len(16) = 48 bits
+      unsigned char nextHeader = *packetDataIngress;
+      if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
+        BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 RA Extension");
+        hasRAExtension = true;
       }
     }
 
@@ -779,88 +763,99 @@ SimpleSwitch::egress_thread(size_t worker_id) {
 
     deparser->deparse(packet.get());
     char *packetDataEgress = packet->data();
+    char *packetDataEgressStart = packetDataEgress;
+    packetDataEgress += 12; // dst(48) + src(48) = 96 bits
+    unsigned short etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
 
-    if (isRARequest) {
-      BMLOG_DEBUG_PKT(*packet, "Switch beginning RA post-deparse value setting");
-      // //Skipping straight to RA type to see if we're responding
-      // packetDataEgress += 8 + 6 + 6 + 2;
-      // unsigned char ihl = *packetDataEgress;
-      // ihl << 2;
-      // ihl >> 2;
-      // packetDataEgress += ihl * 4;
-      // unsigned char raType = *packetDataEgress;
-      // raType >> 6;
-      // if (raType == 2) isRAResponse = true;
-      //First offset = 8 + 6 + 6
-      //48 bits for dst MAC, 48 for src MAC, arrive at ethertype
-      packetDataEgress += 6 + 6;
-      unsigned short etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
-      if (etype == 2048) { // IPv4, 0x0800
-        BMLOG_DEBUG_PKT(*packet, "Switch found ethertype 0x8000");
-        //Grab the ihl value, to be used later
-        packetDataEgress += 2;
-        unsigned char ihl = *packetDataEgress;
-        /*Next shift is to proto field, crossing
-          8 bits for ver and ihl
-          6+2 bits for dscp and ecn
-          16 bits for length
-          16 bits for ID
-          16 bits for flags and frag offset
-          8 bits fot TTL
-        */
-        packetDataEgress += 1 + 1 + 2 + 2 + 2 + 1;
-        unsigned char proto = *packetDataEgress;
-        if (proto == 144) { //Remote Attestation, 0x90
-          BMLOG_DEBUG_PKT(*packet, "Switch found IP protocol 0x90");
-          //Next shift is to start of RA header, so must cover all of IPv4
-          //IHL is the size of the IPv4 header in 32 bit (4 byte) blocks
-          //9 bytes are already covered
-          //Must subtract off the value from version, which is the value 4
-          //in the upper 4 bits
-          packetDataEgress += (ihl - 64) * 4 - 9;
-          unsigned char raType = *packetDataEgress;
-          if (raType == 2) {
-            BMLOG_DEBUG_PKT(*packet, "Switch found RA type Response");
-            isRAResponse = true;
+    if (hasRAExtension) {
+      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Beginning post-deparse with existing RA extension");
+      if (etype == 34984) { // 802.1Q double, 0x88A8
+        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q double");
+        packetDataEgress += 8;
+      }
+      else if (etype == 33024) { // 802.1Q single, 0x8100
+        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q single");
+        packetDataEgress += 4;
+      }
+      etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
+      packetDataEgress += 4;
+      if (etype == 34525) { // IPv6, 0x86DD
+        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
+        packetDataEgress += 6; // ver(4) + class(8) + flow (20) + len(16) = 48 bits
+        unsigned char nextHeader = *packetDataEgress;
+        if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
+          packetDataEgress += 2; // next(8) + len(8) = 16 bits
+          unsigned char route[16];
+          for (int q = 0; q < (int)(nb_ra_registers); q++) {
+            memcpy(packetDataEgress, &ra_registers[16*q], 16);
+            memcpy(&route[0], packetDataEgress + 32, 16);
+            for (int r = 0; r < 16; r++) {
+              route[r] ^= ra_registers[16*q + r];
+            }
+            memcpy(packetDataEgress + 32, &route[0], 16);
+            packetDataEgress += 16;
           }
         }
       }
     }
-
-    if (isRAResponse) {
-      BMLOG_DEBUG_PKT(*packet, "Setting Packet RA Values");
-      packetDataEgress += 1;
-      // for(int q = 0; q < 3; q++) {
-      //   uint32_t tempval = ra_registers[q];
-      //   //tempval >> 24;
-      //   *packetDataEgress = (char)(tempval >> 24);
-      //   packetDataEgress += 1;
-
-      //   tempval = ra_registers[q];
-      //   //tempval << 8;
-      //   //tempval >> 24;
-      //   *packetDataEgress = (char)((tempval << 8) >> 24);
-      //   packetDataEgress += 1;
-
-      //   tempval = ra_registers[q];
-      //   //tempval << 16;
-      //   //tempval >> 24;
-      //   *packetDataEgress = (char)((tempval << 16) >> 24);
-      //   packetDataEgress += 1;
-
-      //   tempval = ra_registers[q];
-      //   //tempval << 24;
-      //   //tempval >> 24;
-      //   *packetDataEgress = (char)((tempval << 24) >> 24);
-      //   packetDataEgress += 1;
-      // }
-      for(int q = 0; q < (int)(nb_ra_registers * 16); q++) {
-        *packetDataEgress = ra_registers[q];
-        packetDataEgress += 1;
+    else if (isIPv6) {
+      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
+      size_t sizeIPData = 12;
+      if (etype == 34984) { // 802.1Q double, 0x88A8
+        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q double");
+        sizeIPData += 8;
+        packetDataEgress += 8;
+      }
+      else if (etype == 33024) { // 802.1Q single, 0x8100
+        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q single");
+        sizeIPData += 4;
+        packetDataEgress += 4;
+      }
+      etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
+      sizeIPData += 2;
+      packetDataEgress += 2;
+      if (etype == 34525) { // IPv6, 0x86DD
+        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
+        packetDataEgress += 6; // ver(4) + class(8) + flow (20) + len(16) = 48 bits
+        unsigned char nextHeader = *packetDataEgress;
+        if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
+          packetDataEgress += 34; // next(8) + hops(8) + src(128) + dst(128) = 264 bits
+          packetDataEgress += 2; // next(8) + len(8) = 16 bits
+          unsigned char route[16];
+          for (int q = 0; q < (int)(nb_ra_registers); q++) {
+            memcpy(packetDataEgress, &ra_registers[16*q], 16);
+            memcpy(&route[0], packetDataEgress + 32, 16);
+            for (int r = 0; r < 16; r++) {
+              route[r] ^= ra_registers[16*q + r];
+            }
+            memcpy(packetDataEgress + 48, &route[0], 16);
+            packetDataEgress += 16;
+          }
+        }
+        else {
+          sizeIPData += 40; // size of IPv6 header
+          *packetDataEgress = 160;
+          packetDataEgress -= 2; // get back to len
+          unsigned short length = (*packetDataEgress << 8) | *(packetDataEgress + 1);
+          length += 98; // size of RA extension
+          *packetDataEgress = (char)(length >> 8);
+          *(packetDataEgress + 1) = (char)((length << 8) >> 8);
+          packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 280 bits
+          char *packetDataNew = packet->prepend(98);
+          *packetDataEgress = nextHeader; // Set next in RA extension to what was in IPv6
+          *(packetDataEgress + 1) = 98; // Set length of RA extension
+          packetDataEgress += 2;
+          memmove(packetDataNew, packetDataEgressStart, sizeIPData);
+          for (int q = 0; q < (int)(nb_ra_registers); q++) {
+            memcpy(packetDataEgress, &ra_registers[16*q], 16);
+            memcpy(packetDataEgress + 48, &ra_registers[16*q], 16);
+            packetDataEgress += 16;
+          }
+        }
       }
     }
-
-
 
     // RECIRCULATE
     auto recirculate_flag = RegisterAccess::get_recirculate_flag(packet.get());

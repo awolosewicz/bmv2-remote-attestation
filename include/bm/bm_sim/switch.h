@@ -289,9 +289,66 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   unsigned char ra_registers[16*nb_ra_registers];
   void update_ra_registers(unsigned char *val, unsigned int idx) {
     idx *= 16; //0-15 for registers, 16-31 for tables, 32-48 for program
-    for (int i = 0; i < 16; i++) {
-      ra_registers[idx+i] = val[i];
+    memcpy(&ra_registers[idx], val, 16);
+  }
+
+  void
+  ra_hash_registers(cxt_id_t cxt_id) {
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    unsigned char md5[16];
+    for (auto top_it = contexts.at(cxt_id).get_register_arrays_begin_();
+              top_it != contexts.at(cxt_id).get_register_arrays_end_();
+              top_it++) {
+      for (auto it = top_it->second->begin();
+                it != top_it->second->end();
+                it++) {
+        std::string tempstr = it->get_string_repr();
+        MD5_Update(&ctx, tempstr.data(), tempstr.size());
+      }
     }
+    MD5_Final(md5, &ctx);
+    update_ra_registers(md5, 0);
+  }
+
+  void
+  ra_hash_tables(cxt_id_t cxt_id) {
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    unsigned char md5[16];
+    for (auto top_it = contexts.at(cxt_id).get_mts_begin_();
+              top_it != contexts.at(cxt_id).get_mts_end_();
+              top_it++) {
+      auto abstract_table = top_it->second->get_match_table();
+      auto table = dynamic_cast<MatchTable *>(abstract_table);
+      std::vector<bm::MatchTable::Entry> entries = table->get_entries();
+      for (auto it = entries.begin(); it != entries.end(); it++) {
+        bm::ActionData action_data = it->action_data;
+        for (int q = 0; q < (int)action_data.size(); q++) {
+          std::string tempstr = action_data.get(q).get_string_repr();
+          MD5_Update(&ctx, tempstr.data(), tempstr.size());
+        }
+      }
+    }
+    MD5_Final(md5, &ctx);
+    update_ra_registers(md5, 1);
+  }
+
+  void
+  ra_hash_program() {
+    MD5_CTX cxt;
+    MD5_Init(&cxt);
+    MD5_Update(&cxt, current_config.data(), current_config.size());
+    unsigned char md5[16];
+    MD5_Final(md5, &cxt);
+    update_ra_registers(md5, 2);
+  }
+
+  void
+  init_ra_registers() {
+    ra_hash_registers();
+    ra_hash_tables();
+    ra_hash_program();
   }
 
   //! Construct and return a Packet instance for the given \p cxt_id.
@@ -333,29 +390,6 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   int transport_send_probe(uint64_t x) const;
 
   // ---------- RuntimeInterface ----------
-
-  void
-  ra_hash_tables(cxt_id_t cxt_id) {
-    MD5_CTX ctx;
-    MD5_Init(&ctx);
-    unsigned char md5[16];
-    for (auto top_it = contexts.at(cxt_id).get_mts_begin_();
-              top_it != contexts.at(cxt_id).get_mts_end_();
-              top_it++) {
-      auto abstract_table = top_it->second->get_match_table();
-      auto table = dynamic_cast<MatchTable *>(abstract_table);
-      std::vector<bm::MatchTable::Entry> entries = table->get_entries();
-      for (auto it = entries.begin(); it != entries.end(); it++) {
-        bm::ActionData action_data = it->action_data;
-        for (int q = 0; q < (int)action_data.size(); q++) {
-          std::string tempstr = action_data.get(q).get_string_repr();
-          MD5_Update(&ctx, tempstr.data(), tempstr.size());
-        }
-      }
-    }
-    MD5_Final(md5, &ctx);
-    update_ra_registers(md5, 1);
-  }
 
   MatchErrorCode
   mt_get_num_entries(cxt_id_t cxt_id,
@@ -807,22 +841,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
                  const size_t idx, Data value) override {
     RegisterErrorCode toReturn = contexts.at(cxt_id).register_write(
         register_name, idx, std::move(value));
-    MD5_CTX ctx;
-    MD5_Init(&ctx);
-    unsigned char md5[16];
-    for (auto top_it = contexts.at(cxt_id).get_register_arrays_begin_();
-              top_it != contexts.at(cxt_id).get_register_arrays_end_();
-              top_it++) {
-      for (auto it = top_it->second->begin();
-                it != top_it->second->end();
-                it++) {
-        std::string tempstr = it->get_string_repr();
-        MD5_Update(&ctx, tempstr.data(), tempstr.size());
-      }
-    }
-    MD5_Final(md5, &ctx);
-
-    update_ra_registers(md5, 0);
+    ra_hash_registers(cxt_id);
     return toReturn;
   }
 
@@ -833,21 +852,7 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
                        Data value) override {
     RegisterErrorCode toReturn = contexts.at(cxt_id).register_write_range(
         register_name, start, end, std::move(value));
-    MD5_CTX ctx;
-    MD5_Init(&ctx);
-    unsigned char md5[16];
-    for (auto top_it = contexts.at(cxt_id).get_register_arrays_begin_();
-              top_it != contexts.at(cxt_id).get_register_arrays_end_();
-              top_it++) {
-      for (auto it = top_it->second->begin();
-                it != top_it->second->end();
-                it++) {
-        std::string tempstr = it->get_string_repr();
-        MD5_Update(&ctx, tempstr.data(), tempstr.size());
-      }
-    }
-    MD5_Final(md5, &ctx);
-    update_ra_registers(md5, 0);
+    ra_hash_registers(cxt_id);
     return toReturn;
   }
 

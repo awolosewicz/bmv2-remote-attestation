@@ -368,12 +368,7 @@ SwitchWContexts::swap_configs() {
     _BM_UNUSED(error);
     assert(!error);
   }
-  MD5_CTX cxt;
-  MD5_Init(&cxt);
-  MD5_Update(&cxt, current_config.data(), current_config.size());
-  unsigned char md5[16];
-  MD5_Final(md5, &cxt);
-  update_ra_registers(md5, 2);
+  ra_hash_program();
   config_loaded_cv.notify_one();
   return ErrorCode::SUCCESS;
 }
