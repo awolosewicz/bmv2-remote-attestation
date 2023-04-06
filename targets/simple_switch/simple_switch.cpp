@@ -239,7 +239,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
 
   import_primitives(this);
 
-  init_ra_registers();
+  init_ra_registers(0);
 }
 
 int

@@ -345,9 +345,9 @@ class SwitchWContexts : public DevMgr, public RuntimeInterface {
   }
 
   void
-  init_ra_registers() {
-    ra_hash_registers();
-    ra_hash_tables();
+  init_ra_registers(cxt_id_t cxt_id) {
+    ra_hash_registers(cxt_id);
+    ra_hash_tables(cxt_id);
     ra_hash_program();
   }
 
