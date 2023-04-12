@@ -151,6 +151,7 @@ class Data {
   __attribute__((optimize("O0")))
 #endif
   set(const std::string &hexstring) {
+    BMLOG_DEBUG("Setting data to hexstring '{}'", hexstring);
     std::vector<char> bytes;
     size_t idx = 0;
     bool neg = false;
