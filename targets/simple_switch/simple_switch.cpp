@@ -238,8 +238,9 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   force_arith_header("intrinsic_metadata");
 
   import_primitives(this);
-
+  BMLOG_DEBUG("Initializaing RA Registers");
   init_ra_registers(0);
+  BMLOG_DEBUG("RA Registers Initialized");
 }
 
 int
