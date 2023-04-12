@@ -73,6 +73,7 @@ class Data {
   virtual ~Data() { }
 
   static char char2digit(char c) {
+    BMLOG_DEBUG("Attemtping char2digit on char '{}'", c);
     if (c >= '0' && c <= '9')
       return (c - '0');
     if (c >= 'A' && c <= 'F')
