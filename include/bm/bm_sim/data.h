@@ -33,6 +33,7 @@
 
 #include "bignum.h"
 #include "bytecontainer.h"
+#include "logger.h"
 
 namespace bm {
 
