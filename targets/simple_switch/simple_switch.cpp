@@ -843,11 +843,14 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           *(packetDataEgress + 1) = (char)((length << 8) >> 8);
           packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 280 bits
           char *packetDataNew = packet->prepend(98);
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Gave room to packet, new start {:p}, old start {:p}", (void *)(packetDataNew), (void *)(packetDataEgressStart));
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
+                          sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
+          memmove(packetDataNew, packetDataEgressStart, sizeIPData);
+          packetDataEgress = packetDataNew + sizeIPData;
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA IPv6 Extension header at {:p}", (void *)(packetDataEgress));
           *packetDataEgress = nextHeader; // Set next in RA extension to what was in IPv6
           *(packetDataEgress + 1) = 98; // Set length of RA extension
           packetDataEgress += 2;
-          memmove(packetDataNew, packetDataEgressStart, sizeIPData);
           for (int q = 0; q < (int)(nb_ra_registers); q++) {
             memcpy(packetDataEgress, &ra_registers[16*q], 16);
             memcpy(packetDataEgress + 48, &ra_registers[16*q], 16);
