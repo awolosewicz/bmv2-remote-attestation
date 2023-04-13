@@ -840,7 +840,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         }
         else {
           sizeIPData += 40; // size of IPv6 header
-          *packetDataEgress = 160;
+          *packetDataEgress = RA_EXT_ID;
           packetDataEgress -= 2; // get back to len
           unsigned short length = (*packetDataEgress << 8) | *(packetDataEgress + 1);
           length += 98; // size of RA extension
