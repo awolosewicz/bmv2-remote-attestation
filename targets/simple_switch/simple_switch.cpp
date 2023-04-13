@@ -238,9 +238,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   force_arith_header("intrinsic_metadata");
 
   import_primitives(this);
-  BMLOG_DEBUG("Initializaing RA Registers");
   init_ra_registers(0);
-  BMLOG_DEBUG("RA Registers Initialized");
 }
 
 int
@@ -248,6 +246,7 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // we limit the packet buffer to original size + 512 bytes, which means we
   // cannot add more than 512 bytes of header data to the packet, which should
   // be more than enough
+  BMLOG_DEBUG("Received packet")
   auto packet = new_packet_ptr(port_num, packet_id++, len,
                                bm::PacketBuffer(len + 512, buffer, len));
 
