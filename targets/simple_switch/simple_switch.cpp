@@ -822,7 +822,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
         packetDataEgress += 8; // etype(2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
         unsigned char nextHeader = *packetDataEgress;
-        if (nextHeader RA_EXT_ID) {
+        if (nextHeader == RA_EXT_ID) {
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
           packetDataEgress += 34; // next(8) + hops(8) + src(128) + dst(128) = 272 bits
           packetDataEgress += 2; // next(8) + len(8) = 16 bits
