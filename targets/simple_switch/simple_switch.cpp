@@ -519,7 +519,7 @@ SimpleSwitch::ingress_thread() {
     //}
     packetDataIngress += 6 + 6;
     unsigned short etype = (*packetDataIngress << 8) | (65280 & *(packetDataIngress + 1)); // 65280 == 0xff00
-    BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse, etype is {}, 2 before is {}, 2 after is {}", etype, before, after);
+    BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse, etype is {}", etype);
     if (etype == 34984) { // 802.1Q double, 0x88A8
       BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q double");
       packetDataIngress += 8;
