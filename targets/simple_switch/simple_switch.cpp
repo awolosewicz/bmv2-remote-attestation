@@ -518,17 +518,17 @@ SimpleSwitch::ingress_thread() {
     //  BMLOG_DEBUG_PKT(*packet, "Byte is value {}", *(packetDataIngress + i));
     //}
     packetDataIngress += 6 + 6;
-    unsigned short etype = (*packetDataIngress << 8) | (65280 & *(packetDataIngress + 1)); // 65280 == 0xff00
+    unsigned short etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
     BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse, etype is {}", etype);
     if (etype == 34984) { // 802.1Q double, 0x88A8
       BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q double");
       packetDataIngress += 8;
-      etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
+      etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
     }
     else if (etype == 33024) { // 802.1Q single, 0x8100
       BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q single");
       packetDataIngress += 4;
-      etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
+      etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
     }
     if (etype == 34525) { // IPv6, 0x86DD
       BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 ethertype");
