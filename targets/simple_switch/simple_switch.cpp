@@ -517,7 +517,7 @@ SimpleSwitch::ingress_thread() {
     //for (int i = 0; i < 20; i++) {
     //  BMLOG_DEBUG_PKT(*packet, "Byte is value {}", *(packetDataIngress + i));
     //}
-    packetDataIngress += 6 + 6;
+    packetDataIngress += 12;
     unsigned short etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
     BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse, etype is {}", etype);
     if (etype == 34984) { // 802.1Q double, 0x88A8
@@ -764,23 +764,23 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     char *packetDataEgress = packet->data();
     char *packetDataEgressStart = packetDataEgress;
     packetDataEgress += 12; // dst(48) + src(48) = 96 bits
-    unsigned short etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
+    unsigned short etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
 
     if (hasRAExtension) {
       BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Beginning post-deparse with existing RA extension");
       if (etype == 34984) { // 802.1Q double, 0x88A8
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q double");
         packetDataEgress += 8;
+        etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
       }
       else if (etype == 33024) { // 802.1Q single, 0x8100
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q single");
         packetDataEgress += 4;
+        etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
       }
-      etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
-      packetDataEgress += 4;
       if (etype == 34525) { // IPv6, 0x86DD
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
-        packetDataEgress += 6; // ver(4) + class(8) + flow (20) + len(16) = 48 bits
+        packetDataEgress += 8; // etype(2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
         unsigned char nextHeader = *packetDataEgress;
         if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
@@ -805,18 +805,18 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q double");
         sizeIPData += 8;
         packetDataEgress += 8;
+        etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
       }
       else if (etype == 33024) { // 802.1Q single, 0x8100
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q single");
         sizeIPData += 4;
         packetDataEgress += 4;
+        etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
       }
-      etype = (*packetDataEgress << 8) | *(packetDataEgress + 1);
       sizeIPData += 2;
-      packetDataEgress += 2;
       if (etype == 34525) { // IPv6, 0x86DD
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
-        packetDataEgress += 6; // ver(4) + class(8) + flow (20) + len(16) = 48 bits
+        packetDataEgress += 8; // etype(2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
         unsigned char nextHeader = *packetDataEgress;
         if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
