@@ -519,21 +519,21 @@ SimpleSwitch::ingress_thread() {
     //}
     packetDataIngress += 6 + 6;
     unsigned short etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
-    BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse");
+    BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse, etype is {}", etype);
     if (etype == 34984) { // 802.1Q double, 0x88A8
       BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q double");
       packetDataIngress += 8;
+      etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
     }
     else if (etype == 33024) { // 802.1Q single, 0x8100
       BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q single");
       packetDataIngress += 4;
+      etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
     }
-    etype = (*packetDataIngress << 8) | *(packetDataIngress + 1);
-    packetDataIngress += 2;
     if (etype == 34525) { // IPv6, 0x86DD
       BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 ethertype");
       isIPv6 = true;
-      packetDataIngress += 6; // ver(4) + class(8) + flow (20) + len(16) = 48 bits
+      packetDataIngress += 8; // etype (2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
       unsigned char nextHeader = *packetDataIngress;
       if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
         BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 RA Extension");
