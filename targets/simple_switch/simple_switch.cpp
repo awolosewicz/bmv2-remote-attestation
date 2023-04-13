@@ -264,11 +264,9 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // each add_header / remove_header primitive call
   packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
   phv->get_field("standard_metadata.packet_length").set(len);
-  BMLOG_DEBUG("Setting RA standard Metadata");
   phv->get_field("standard_metadata.ra_registers").set((char *)&ra_registers[0], 16);
   phv->get_field("standard_metadata.ra_tables").set((char *)&ra_registers[16], 16);
   phv->get_field("standard_metadata.ra_program").set((char *)&ra_registers[32], 16);
-  BMLOG_DEBUG("RA standard Metadata set");
   Field &f_instance_type = phv->get_field("standard_metadata.instance_type");
   f_instance_type.set(PKT_INSTANCE_TYPE_NORMAL);
 
