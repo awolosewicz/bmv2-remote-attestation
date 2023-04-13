@@ -784,15 +784,17 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         unsigned char nextHeader = *packetDataEgress;
         if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
+          packetDataEgress += 34; // next(8) + hops(8) + src(128) + dst(128) = 272 bits
           packetDataEgress += 2; // next(8) + len(8) = 16 bits
           unsigned char route[16];
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA data");
           for (int q = 0; q < (int)(nb_ra_registers); q++) {
             memcpy(packetDataEgress, &ra_registers[16*q], 16);
-            memcpy(&route[0], packetDataEgress + 32, 16);
+            memcpy(&route[0], packetDataEgress + 48, 16);
             for (int r = 0; r < 16; r++) {
               route[r] ^= ra_registers[16*q + r];
             }
-            memcpy(packetDataEgress + 32, &route[0], 16);
+            memcpy(packetDataEgress + 48, &route[0], 16);
             packetDataEgress += 16;
           }
         }
@@ -819,11 +821,11 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         packetDataEgress += 8; // etype(2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
         unsigned char nextHeader = *packetDataEgress;
         if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension at {:p}", (void *)(packetDataEgress));
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
           packetDataEgress += 34; // next(8) + hops(8) + src(128) + dst(128) = 272 bits
           packetDataEgress += 2; // next(8) + len(8) = 16 bits
           unsigned char route[16];
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA data at {:p}", (void *)(packetDataEgress));
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA data");
           for (int q = 0; q < (int)(nb_ra_registers); q++) {
             memcpy(packetDataEgress, &ra_registers[16*q], 16);
             memcpy(&route[0], packetDataEgress + 48, 16);
