@@ -74,7 +74,6 @@ class Data {
   virtual ~Data() { }
 
   static char char2digit(char c) {
-    BMLOG_DEBUG("Attemtping char2digit on char '{}'", c);
     if (c >= '0' && c <= '9')
       return (c - '0');
     if (c >= 'A' && c <= 'F')
@@ -151,7 +150,6 @@ class Data {
   __attribute__((optimize("O0")))
 #endif
   set(const std::string &hexstring) {
-    BMLOG_DEBUG("Setting data to hexstring '{}'", hexstring);
     std::vector<char> bytes;
     size_t idx = 0;
     bool neg = false;
