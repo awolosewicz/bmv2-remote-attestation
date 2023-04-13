@@ -37,6 +37,8 @@
 #include "simple_switch.h"
 #include "register_access.h"
 
+#define RA_EXT_ID 253
+
 namespace {
 
 struct hash_ex {
@@ -535,7 +537,7 @@ SimpleSwitch::ingress_thread() {
       isIPv6 = true;
       packetDataIngress += 8; // etype (2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
       unsigned char nextHeader = *packetDataIngress;
-      if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
+      if (nextHeader == RA_EXT_ID) {
         BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 RA Extension");
         hasRAExtension = true;
       }
@@ -782,7 +784,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
         packetDataEgress += 8; // etype(2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
         unsigned char nextHeader = *packetDataEgress;
-        if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
+        if (nextHeader == RA_EXT_ID) {
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
           packetDataEgress += 34; // next(8) + hops(8) + src(128) + dst(128) = 272 bits
           packetDataEgress += 2; // next(8) + len(8) = 16 bits
@@ -820,7 +822,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
         packetDataEgress += 8; // etype(2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
         unsigned char nextHeader = *packetDataEgress;
-        if (nextHeader == 160) { // IPv6 RA extension header, 0xA0
+        if (nextHeader RA_EXT_ID) {
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 RA extension");
           packetDataEgress += 34; // next(8) + hops(8) + src(128) + dst(128) = 272 bits
           packetDataEgress += 2; // next(8) + len(8) = 16 bits
