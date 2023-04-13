@@ -843,7 +843,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           *(packetDataEgress + 1) = (char)((length << 8) >> 8);
           packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 280 bits
           char *packetDataNew = packet->prepend(98);
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Gave room to packet, new start {:x}, old start {:x}", packetDataNew, packetDataEgressStart);
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Gave room to packet, new start \\x{:02x}, old start \\x{:02x}", packetDataNew, packetDataEgressStart);
           *packetDataEgress = nextHeader; // Set next in RA extension to what was in IPv6
           *(packetDataEgress + 1) = 98; // Set length of RA extension
           packetDataEgress += 2;
