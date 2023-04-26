@@ -540,7 +540,7 @@ SimpleSwitch::ingress_thread() {
       if (nextHeader == 0) {
         BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 HBH Options");
         hasHBHOtions = true;
-        packetDataIngress += 34; // nextHeader(8) + hops(8) + src(128) + dst(128) + nextHeader(8) = 280 bits
+        packetDataIngress += 35; // nextHeader(8) + hops(8) + src(128) + dst(128) + nextHeader(8) = 280 bits
         unsigned short hbhLength = ((unsigned short)(*packetDataIngress) * 8) + 8; //length is 8-octet units beyond the first 8
         char *start = packetDataIngress;
         packetDataIngress += 1;
@@ -921,7 +921,11 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             *(packetDataEgress + 1) = 0;
             *(packetDataEgress + 2) = RA_HBH_OPTION;
             *(packetDataEgress + 3) = 100;
-            packetDataEgress += 4;
+            *(packetDataEgress + 4) = 0;
+            *(packetDataEgress + 4) = 0;
+            *(packetDataEgress + 4) = 0;
+            *(packetDataEgress + 4) = 0;
+            packetDataEgress += 8;
             for (int q = 0; q < (int)(nb_ra_registers); q++) {
               memcpy(packetDataEgress, &ra_registers[16*q], 16);
               memcpy(packetDataEgress + 48, &ra_registers[16*q], 16);
@@ -937,7 +941,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           length += 104; // size of RA HBH Option
           *packetDataEgress = (char)(length >> 8);
           *(packetDataEgress + 1) = (char)((length << 8) >> 8);
-          packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 280 bits
+          packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 288 bits
           char *packetDataNew = packet->prepend(104);
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
                           sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
@@ -948,7 +952,11 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           *(packetDataEgress + 1) = 12; // Set length of HBH options (13 - 1)
           *(packetDataEgress + 2) = RA_HBH_OPTION;
           *(packetDataEgress + 3) = 100;
-          packetDataEgress += 4;
+          *(packetDataEgress + 4) = 0;
+          *(packetDataEgress + 4) = 0;
+          *(packetDataEgress + 4) = 0;
+          *(packetDataEgress + 4) = 0;
+          packetDataEgress += 8;
           for (int q = 0; q < (int)(nb_ra_registers); q++) {
             memcpy(packetDataEgress, &ra_registers[16*q], 16);
             memcpy(packetDataEgress + 48, &ra_registers[16*q], 16);
