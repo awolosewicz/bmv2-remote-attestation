@@ -197,6 +197,7 @@ class SimpleSwitch : public Switch {
   //std::array<uint32_t, nb_ra_registers> ra_registers;
   //unsigned char ra_registers[16*nb_ra_registers];
   bool hasRAExtension = false;
+  bool hasHBHOtions = false;
   bool isIPv6 = false;
   // for these queues, the write operation is non-blocking and we drop the
   // packet if the queue is full
