@@ -1,9 +1,10 @@
-BMV2=../behavioral-model
+#In-repo paths
 SSWITCH_LIB=targets/simple_switch/.libs
 THRIFT_LIB=thrift_src/.libs
 THRIFT_CPP=thrift_src/gen-cpp/bm
 THRIFT_PY=thrift_src/gen-py/bm_runtime/
 SRC_LIB=src/.libs
+#Machine paths
 BIN=/usr/local/bin
 LIB=/usr/local/lib
 INCLUDE=/usr/local/include
