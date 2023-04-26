@@ -549,6 +549,8 @@ SimpleSwitch::ingress_thread() {
           BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Looping: At {:p}, under {:p}, type is {}", (void *)packetDataIngress, (void *)(start + hbhLength), *packetDataIngress);
           if (*packetDataIngress == RA_HBH_OPTION) {
             hasRAExtension = true;
+            BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found RA HBH Option");
+            break;
           }
           else if (*packetDataIngress == 0) {
             packetDataIngress += 1;
@@ -828,6 +830,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
                 memcpy(packetDataEgress + 48, &route[0], 16);
                 packetDataEgress += 16;
               }
+              break;
             }
             else if (*packetDataEgress == 0) {
               packetDataEgress += 1;
@@ -888,6 +891,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
                 memcpy(packetDataEgress + 48, &route[0], 16);
                 packetDataEgress += 16;
               }
+              break;
             }
             else if (*packetDataEgress == 0) {
               packetDataEgress += 1;
