@@ -519,6 +519,7 @@ SimpleSwitch::ingress_thread() {
     //for (int i = 0; i < 20; i++) {
     //  BMLOG_DEBUG_PKT(*packet, "Byte is value {}", *(packetDataIngress + i));
     //}
+    hasRAExtension = false;
     packetDataIngress += 12;
     unsigned short etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
     BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse, etype is {}", etype);
