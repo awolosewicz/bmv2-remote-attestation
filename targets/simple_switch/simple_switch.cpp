@@ -541,7 +541,7 @@ SimpleSwitch::ingress_thread() {
         BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 HBH Options");
         hasHBHOtions = true;
         packetDataIngress += 34; // nextHeader(8) + hops(8) + src(128) + dst(128) + nextHeader(8) = 280 bits
-        unsigned char hbhLength = (*packetDataIngress * 8) + 8; //length is 8-octet units beyond the first 8
+        unsigned short hbhLength = ((unsigned short)(*packetDataIngress) * 8) + 8; //length is 8-octet units beyond the first 8
         char *start = packetDataIngress;
         packetDataIngress += 1;
         BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] HBH Options have length {:d}", hbhLength);
@@ -557,7 +557,7 @@ SimpleSwitch::ingress_thread() {
           }
           else {
             packetDataIngress += 1;
-            packetDataIngress += (*packetDataIngress * 8) + 1;
+            packetDataIngress += ((unsigned short)(*packetDataIngress) * 8) + 1;
           }
         }
       }
@@ -807,7 +807,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         if (nextHeader == 0) {
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 HBH Options");
           packetDataEgress += 35; // next(8) + hops(8) + src(128) + dst(128) + next(8) = 280 bits
-          unsigned char hbhLength = (*packetDataEgress * 8) + 8; //length is 8-octet units beyond the first 8
+          unsigned char hbhLength = ((unsigned short)(*packetDataEgress) * 8) + 8; //length is 8-octet units beyond the first 8
           char *start = packetDataEgress;
           packetDataEgress += 1;
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] HBH Options have length {:d}", hbhLength);
@@ -837,7 +837,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             }
             else {
               packetDataEgress += 1;
-              packetDataEgress += (*packetDataEgress * 8) + 1;
+              packetDataEgress += ((unsigned short)(*packetDataEgress) * 8) + 1;
             }
           }
         }
@@ -866,7 +866,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         if (nextHeader == 0) {
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 HBH Options");
           packetDataEgress += 35; // next(8) + hops(8) + src(128) + dst(128) + next(8) = 280 bits
-          unsigned char hbhLength = (*packetDataEgress * 8) + 8; //length is 8-octet units beyond the first 8
+          unsigned char hbhLength = ((unsigned short)(*packetDataEgress) * 8) + 8; //length is 8-octet units beyond the first 8
           char *start = packetDataEgress;
           packetDataEgress += 1;
           bool existsRAOption = false;
@@ -898,7 +898,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             }
             else {
               packetDataEgress += 1;
-              packetDataEgress += (*packetDataEgress * 8) + 1;
+              packetDataEgress += ((unsigned short)(*packetDataEgress) * 8) + 1;
             }
           }
           if (!existsRAOption) {
