@@ -538,13 +538,15 @@ SimpleSwitch::ingress_thread() {
       packetDataIngress += 8; // etype (2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
       unsigned char nextHeader = *packetDataIngress;
       if (nextHeader == 0) {
-        BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 Hop-By-Hop Extension");
+        BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 HBH Options");
         hasHBHOtions = true;
         packetDataIngress += 34; // nextHeader(8) + hops(8) + src(128) + dst(128) + nextHeader(8) = 280 bits
         unsigned char hbhLength = (*packetDataIngress * 8) + 8; //length is 8-octet units beyond the first 8
         char *start = packetDataIngress;
         packetDataIngress += 1;
+        BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] HBH Options have length {}", hbhLength);
         while (packetDataIngress < start + hbhLength) {
+          BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Looping: At {:p}, under {:p}, type is {}", (void *)packetDataIngress, (void *)(start + hbhLength), *packetDataIngress);
           if (*packetDataIngress == RA_HBH_OPTION) {
             hasRAExtension = true;
           }
@@ -806,7 +808,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           unsigned char hbhLength = (*packetDataEgress * 8) + 8; //length is 8-octet units beyond the first 8
           char *start = packetDataEgress;
           packetDataEgress += 1;
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] HBH Options have length {}", hbhLength);
           while (packetDataEgress < start + hbhLength) {
+            BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Looping: At {:p}, under {:p}, type is {}", (void *)packetDataEgress, (void *)(start + hbhLength), *packetDataEgress);
             if (*packetDataEgress == RA_HBH_OPTION) {
               packetDataEgress += 6; // type(8) + len(8) + padding(32) = 48 bits
               unsigned char delta = packetDataEgress - start;
@@ -863,7 +867,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           char *start = packetDataEgress;
           packetDataEgress += 1;
           bool existsRAOption = false;
+          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] HBH Options have length {}", hbhLength);
           while (packetDataEgress < start + hbhLength) {
+            BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Looping: At {:p}, under {:p}, type is {}", (void *)packetDataEgress, (void *)(start + hbhLength), *packetDataEgress);
             if (*packetDataEgress == RA_HBH_OPTION) {
               existsRAOption = true;
               packetDataEgress += 6; // type(8) + len(8) + padding(32) = 48 bits
