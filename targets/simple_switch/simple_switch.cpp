@@ -897,7 +897,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             sizeIPData += 40 + hbhLength; // size of IPv6 header + old size of HBH options
             packetDataEgress = start - 37; // back to IPv6 length
             unsigned short length = (*packetDataEgress << 8) | *(packetDataEgress + 1);
-            length += 104
+            length += 104;
             *packetDataEgress = (char)(length >> 8);
             *(packetDataEgress + 1) = (char)((length << 8) >> 8);
             packetDataEgress = start + hbhLength;
