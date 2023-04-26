@@ -542,7 +542,7 @@ SimpleSwitch::ingress_thread() {
         hasHBHOtions = true;
         packetDataIngress += 34; // nextHeader(8) + hops(8) + src(128) + dst(128) + nextHeader(8) = 280 bits
         unsigned char hbhLength = (*packetDataIngress * 8) + 8; //length is 8-octet units beyond the first 8
-        unsigned char *start = packetDataIngress;
+        char *start = packetDataIngress;
         packetDataIngress += 1;
         while (packetDataIngress < start + hbhLength) {
           if (*packetDataIngress == RA_HBH_OPTION) {
@@ -804,7 +804,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 HBH Options");
           packetDataEgress += 35; // next(8) + hops(8) + src(128) + dst(128) + next(8) = 280 bits
           unsigned char hbhLength = (*packetDataEgress * 8) + 8; //length is 8-octet units beyond the first 8
-          unsigned char *start = packetDataEgress;
+          char *start = packetDataEgress;
           packetDataEgress += 1;
           while (packetDataEgress < start + hbhLength) {
             if (*packetDataEgress == RA_HBH_OPTION) {
@@ -859,7 +859,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 HBH Options");
           packetDataEgress += 35; // next(8) + hops(8) + src(128) + dst(128) + next(8) = 280 bits
           unsigned char hbhLength = (*packetDataEgress * 8) + 8; //length is 8-octet units beyond the first 8
-          unsigned char *start = packetDataEgress;
+          char *start = packetDataEgress;
           packetDataEgress += 1;
           bool existsRAOption = false;
           while (packetDataEgress < start + hbhLength) {
