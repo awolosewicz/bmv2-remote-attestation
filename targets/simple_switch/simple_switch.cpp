@@ -831,6 +831,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             else {
               packetDataEgress += 1;
               packetDataEgress += (*packetDataEgress * 8) + 1;
+            }
           }
         }
       }
@@ -904,7 +905,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
                             sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
             memmove(packetDataNew, packetDataEgressStart, sizeIPData);
-            packetDataEgress = packetDataNew + sizeIpData;
+            packetDataEgress = packetDataNew + sizeIPData;
             BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA HBH option at {:p}", (void *)(packetDataEgress));
             *packetDataEgress = 1;
             *(packetDataEgress + 1) = 0;
