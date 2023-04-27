@@ -29,11 +29,11 @@ namespace bm {
 
 PHV::PHV(size_t num_headers, size_t num_header_stacks,
          size_t num_header_unions, size_t num_header_union_stacks)
-    : capacity(num_headers+1), capacity_stacks(num_header_stacks),
+    : capacity(num_headers), capacity_stacks(num_header_stacks),
       capacity_unions(num_header_unions),
       capacity_union_stacks(num_header_union_stacks) {
   // this is needed, otherwise our references will not be valid anymore
-  headers.reserve(num_headers+1);
+  headers.reserve(num_headers);
   header_stacks.reserve(num_header_stacks);
   header_unions.reserve(num_header_unions);
   header_union_stacks.reserve(num_header_union_stacks);
@@ -85,20 +85,6 @@ PHV::copy_headers(const PHV &src) {
     if (headers[h].valid || headers[h].metadata)
       headers[h].copy_fields(src.headers[h]);
   }
-  for (size_t hs = 0; hs < header_stacks.size(); hs++) {
-    header_stacks[hs].next = src.header_stacks[hs].next;
-  }
-  for (size_t hu = 0; hu < header_unions.size(); hu++) {
-    header_unions[hu].valid = src.header_unions[hu].valid;
-    header_unions[hu].valid_header_idx = src.header_unions[hu].valid_header_idx;
-  }
-  for (size_t hus = 0; hus < header_union_stacks.size(); hus++) {
-    header_union_stacks[hus].next = src.header_union_stacks[hus].next;
-  }
-}
-
-void
-PHV::copy_header_stacks_unions(const PHV &src) {
   for (size_t hs = 0; hs < header_stacks.size(); hs++) {
     header_stacks[hs].next = src.header_stacks[hs].next;
   }

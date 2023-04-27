@@ -93,15 +93,6 @@ class PHV {
   PHV(size_t num_headers, size_t num_header_stacks,
       size_t num_header_unions, size_t num_header_union_stacks);
 
-  // Get the length of the headers vector
-  int get_headers_size() {
-    return headers.size();
-  }
-
-  size_t get_capacity() {
-    return capacity;
-  }
-
   //! Access the Header with id \p header_index, with no bound checking.
   Header &get_header(header_id_t header_index) {
     return headers[header_index];
@@ -162,11 +153,6 @@ class PHV {
     return (it != fields_map.end());
   }
 
-  // Get the length of the header stack vector
-  int get_header_stack_size() {
-    return header_stacks.size();
-  }
-
   //! Access the HeaderStack with id \p header_stack_index, with no bound
   //! checking.
   HeaderStack &get_header_stack(header_stack_id_t header_stack_index) {
@@ -177,11 +163,6 @@ class PHV {
   const HeaderStack &get_header_stack(
       header_stack_id_t header_stack_index) const {
     return header_stacks[header_stack_index];
-  }
-
-  // Get the length of the header stack vector
-  int get_header_union_size() {
-    return header_unions.size();
   }
 
   //! Access the HeaderUnion with id \p header_union_index, with no bound
@@ -249,7 +230,6 @@ class PHV {
   //!   - receives the same field values as the corresponding \p src header iff
   //! it is a valid packet header or a metadata header
   void copy_headers(const PHV &src);
-  void copy_header_stacks_unions(const PHV &src);
 
   void set_packet_id(const uint64_t id1, const uint64_t id2) {
     packet_id = {id1, id2};
@@ -308,9 +288,7 @@ class PHV {
   const std::string get_field_name(header_id_t header_index,
                                    int field_offset) const;
 
- public:
-  // awolosewicz: this was private, made public. Below comment was at the time of change
-
+ private:
   // To  be used only by PHVFactory
   // all headers need to be pushed back in order (according to header_index) !!!
   // TODO(antonin): remove this constraint?

@@ -56,7 +56,6 @@ Deparser::get_headers_size(const PHV &phv) const {
   size_t headers_size = 0;
   for (auto it = headers.begin(); it != headers.end(); ++it) {
     const Header &header = phv.get_header(*it);
-    BMLOG_DEBUG("Deparser getting size of header '{}' - valid {}", header.get_name(), header.is_valid());
     if (header.is_valid()) {
       headers_size += header.get_nbytes_packet();
     }
@@ -88,7 +87,6 @@ Deparser::deparse(Packet *pkt) const {
   // destructor, when the PHV is released
   for (auto it = headers.begin(); it != headers.end(); ++it) {
     const auto &header = phv->get_header(*it);
-    BMLOG_DEBUG_PKT(*pkt, "Checking header '{}' for validity - {}", header.get_name(), header.is_valid());
     if (header.is_valid()) {
       BMELOG(deparser_emit, *pkt, *it);
       BMLOG_DEBUG_PKT(*pkt, "Deparsing header '{}'", header.get_name());
