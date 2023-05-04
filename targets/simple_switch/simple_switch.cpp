@@ -511,6 +511,7 @@ SimpleSwitch::ingress_thread() {
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
 
     char *packetDataIngress = packet->data();
+    hadRARouteData = false;
     //First offset = 6 + 6
     //48 bits for dst MAC, 48 for src MAC, arrive at ethertype
     //the first Layer 1 64 bits are not included in the packet data
@@ -545,7 +546,9 @@ SimpleSwitch::ingress_thread() {
           BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Looping: At {:p}, under {:p}, type is {:x}", (void *)packetDataIngress, (void *)(start + hbhLength), *packetDataIngress);
           if (*packetDataIngress == RA_HBH_OPTION) {
             BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found RA HBH Option");
-            // can grab data here if wanted
+            hadRARouteData = true;
+            packetDataIngress += 54; // type(8) + len(8) + padding(32) + first 3 RA(384) = 432 bits
+            memcpy(&route_data[0], packetDataIngress, 48);
             break;
           }
           else if (*packetDataIngress == 0) {
@@ -818,14 +821,27 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             packetDataEgress += 6; // type(8) + len(8) + padding(32) = 48 bits
             unsigned char route[16];
             BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA data at location {:p}", (void*)packetDataEgress);
-            for (int q = 0; q < (int)(nb_ra_registers); q++) {
-              memcpy(packetDataEgress, &ra_registers[16*q], 16);
-              memcpy(&route[0], packetDataEgress + 48, 16);
-              for (int r = 0; r < 16; r++) {
-                route[r] ^= ra_registers[16*q + r];
+            if (hadRARouteData) {
+              for (int q = 0; q < (int)(nb_ra_registers); q++) {
+                memcpy(packetDataEgress, &ra_registers[16*q], 16);
+                memcpy(&route[0], &route_data[0], 16);
+                for (int r = 0; r < 16; r++) {
+                  route[r] ^= ra_registers[16*q + r];
+                }
+                memcpy(packetDataEgress + 48, &route[0], 16);
+                packetDataEgress += 16;
               }
-              memcpy(packetDataEgress + 48, &route[0], 16);
-              packetDataEgress += 16;
+            }
+            else {
+              for (int q = 0; q < (int)(nb_ra_registers); q++) {
+                memcpy(packetDataEgress, &ra_registers[16*q], 16);
+                memcpy(&route[0], packetDataEgress + 48, 16);
+                for (int r = 0; r < 16; r++) {
+                  route[r] ^= ra_registers[16*q + r];
+                }
+                memcpy(packetDataEgress + 48, &route[0], 16);
+                packetDataEgress += 16;
+              }
             }
             break;
           }

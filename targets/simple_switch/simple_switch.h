@@ -194,8 +194,8 @@ class SimpleSwitch : public Switch {
   port_t drop_port;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
-  //std::array<uint32_t, nb_ra_registers> ra_registers;
-  //unsigned char ra_registers[16*nb_ra_registers];
+  bool hadRARouteData = false;
+  unsigned char route_data[16*nb_ra_registers];
   // for these queues, the write operation is non-blocking and we drop the
   // packet if the queue is full
 #ifdef SSWITCH_PRIORITY_QUEUEING_ON
