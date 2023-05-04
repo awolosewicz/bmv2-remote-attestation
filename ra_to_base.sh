@@ -1,3 +1,9 @@
+#!/bin/bash
+
+#Compile your chosen version of BMv2 (tested on commit e9fa7dc687f334e5cf327e0c993fc1a351d224c0)
+#Then install it, find where it installed the given files below, and set the variables accordingly
+#Then compile this repo and run this script with sudo
+
 #In-repo paths
 SSWITCH_LIB=targets/simple_switch/.libs
 THRIFT_LIB=thrift_src/.libs
