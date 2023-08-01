@@ -860,8 +860,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           packetDataEgress = start - 37; // back to IPv6 length
           unsigned short length = (*packetDataEgress << 8) | *(packetDataEgress + 1);
           length += 104;
-          *packetDataEgress = (char)(length >> 8);
-          *(packetDataEgress + 1) = (char)((length << 8) >> 8);
+          *packetDataEgress = (unsigned char)(length >> 8);
+          *(packetDataEgress + 1) = (unsigned char)((length << 8) >> 8);
           packetDataEgress = start + hbhLength;
           char *packetDataNew = packet->prepend(104);
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
@@ -891,8 +891,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         packetDataEgress -= 2; // get back to len
         unsigned short length = (*packetDataEgress << 8) | *(packetDataEgress + 1);
         length += 104; // size of RA HBH Option
-        *packetDataEgress = (char)(length >> 8);
-        *(packetDataEgress + 1) = (char)((length << 8) >> 8);
+        *packetDataEgress = (unsigned char)(length >> 8);
+        *(packetDataEgress + 1) = (unsigned char)((length << 8) >> 8);
         packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 288 bits
         char *packetDataNew = packet->prepend(104);
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
