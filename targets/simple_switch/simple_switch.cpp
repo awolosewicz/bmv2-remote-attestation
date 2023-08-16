@@ -31,6 +31,7 @@
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <arpa/inet.h>
 
 #include "simple_switch.h"
 #include "register_access.h"
@@ -824,7 +825,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             if (hadRARouteData) {
               for (int q = 0; q < (int)(nb_ra_registers); q++) {
                 memcpy(packetDataEgress, &ra_registers[16*q], 16);
-                memcpy(&route[0], &route_data[0], 16);
+                memcpy(&route[0], &route_data[16*q], 16);
                 for (int r = 0; r < 16; r++) {
                   route[r] ^= ra_registers[16*q + r];
                 }
@@ -858,10 +859,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           *packetDataEgress += 13; // 16 * 6 + 8 = 104 octects / 8 = 13 8-octets length for RA HBH option
           sizeIPData += 40 + hbhLength; // size of IPv6 header + old size of HBH options
           packetDataEgress = start - 37; // back to IPv6 length
-          unsigned short length = (*packetDataEgress << 8) | *(packetDataEgress + 1);
-          length += 104;
-          *packetDataEgress = (unsigned char)(length >> 8);
-          *(packetDataEgress + 1) = (unsigned char)((length << 8) >> 8);
+	  unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
+	  length += 104;
+	  *(unsigned short *)packetDataEgress = htons(length);
           packetDataEgress = start + hbhLength;
           char *packetDataNew = packet->prepend(104);
           BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
@@ -889,10 +889,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         sizeIPData += 40; // size of IPv6 header
         *packetDataEgress = 0;
         packetDataEgress -= 2; // get back to len
-        unsigned short length = (*packetDataEgress << 8) | *(packetDataEgress + 1);
-        length += 104; // size of RA HBH Option
-        *packetDataEgress = (unsigned char)(length >> 8);
-        *(packetDataEgress + 1) = (unsigned char)((length << 8) >> 8);
+	unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
+	length += 104;
+	*(unsigned short *)packetDataEgress = htons(length);
         packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 288 bits
         char *packetDataNew = packet->prepend(104);
         BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
