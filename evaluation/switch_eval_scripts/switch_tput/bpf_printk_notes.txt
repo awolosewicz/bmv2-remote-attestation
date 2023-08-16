@@ -1,0 +1,22 @@
+bpf_trace_printk(const char *fmt, u32 fmt_size, ...)
+
+From nakryiko blog:
+Unfortunately, currently you can't just do something like bpf_trace_printk("Hello, world!", ...); due to libbpf limitations. But even if it was possible, the need to specify fmt_size explicitly is quite inconvenient. Libbpf helpfully provides a simple wrapper macro, bpf_printk(fmt, ...), which takes care of such details, though. It is currently defined in <bpf/bpf_helpers.h> like this:
+
+/* Helper macro to print out debug messages */
+#define bpf_printk(fmt, ...)                            \
+({                                                      \
+        char ____fmt[] = fmt;                           \
+        bpf_trace_printk(____fmt, sizeof(____fmt),      \
+                         ##__VA_ARGS__);                \
+})
+
+Verifier does a check using the helper protocol:
+
+static const struct bpf_func_proto bpf_trace_printk_proto = {
+	.func		= bpf_trace_printk,
+	.gpl_only	= true,
+	.ret_type	= RET_INTEGER,
+	.arg1_type	= ARG_PTR_TO_MEM | MEM_RDONLY,
+	.arg2_type	= ARG_CONST_SIZE,
+};
