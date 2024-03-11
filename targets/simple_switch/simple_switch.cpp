@@ -783,8 +783,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     deparser->deparse(packet.get());
-    std::unique_ptr<Packet> packet_ra = packet->clone_with_phv();
-    packet_ra->set_egress_port(0)
+    std::unique_ptr<Packet> packet_ra = packet->clone_with_phv_ptr();
+    packet_ra->set_egress_port(0);
     char *packetDataEgress = packet_ra->data();
     char *packetDataEgressStart = packetDataEgress;
     packetDataEgress += 12; // dst(48) + src(48) = 96 bits
