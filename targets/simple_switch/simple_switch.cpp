@@ -787,7 +787,12 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     packet_ra->set_egress_port(0);
     char *packetDataEgress = packet_ra->data();
     char *packetDataEgressStart = packetDataEgress;
-    packetDataEgress += 12; // dst(48) + src(48) = 96 bits
+    // Set destination MAC to ff:ff:ff:ff:ff:ff
+    for (int i = 0; i < 6; i++) {
+      *packetDataEgress = 255;
+      packetDataEgress += 1;
+    }
+    packetDataEgress += 6; // src = 48 bits = 6 bytes
     unsigned short etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
 
     BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
