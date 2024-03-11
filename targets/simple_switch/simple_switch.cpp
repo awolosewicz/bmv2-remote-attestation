@@ -783,45 +783,47 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     deparser->deparse(packet.get());
-    char *packetDataEgress = packet->data();
+    std::unique_ptr<Packet> packet_ra = packet->clone_with_phv();
+    packet_ra->set_egress_port(0)
+    char *packetDataEgress = packet_ra->data();
     char *packetDataEgressStart = packetDataEgress;
     packetDataEgress += 12; // dst(48) + src(48) = 96 bits
     unsigned short etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
 
-    BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
+    BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
     size_t sizeIPData = 12;
     if (etype == 34984) { // 802.1Q double, 0x88A8
-      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q double");
+      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q double");
       sizeIPData += 8;
       packetDataEgress += 8;
       etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
     }
     else if (etype == 33024) { // 802.1Q single, 0x8100
-      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q single");
+      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q single");
       sizeIPData += 4;
       packetDataEgress += 4;
       etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
     }
     sizeIPData += 2;
     if (etype == 34525) { // IPv6, 0x86DD
-      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
+      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found IPv6 ethertype");
       packetDataEgress += 8; // etype(16) + ver(4) + class(8) + flow (20) + len(16) = 64 bits
       unsigned char nextHeader = *packetDataEgress;
       if (nextHeader == 0) {
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 HBH Options");
+        BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found IPv6 HBH Options");
         packetDataEgress += 35; // next(8) + hops(8) + src(128) + dst(128) + next(8) = 280 bits
         unsigned char hbhLength = ((unsigned short)(*packetDataEgress) * 8) + 8; //length is 8-octet units beyond the first 8
         char *start = packetDataEgress;
         packetDataEgress += 1;
         bool existsRAOption = false;
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] HBH Options have length {:d}", hbhLength);
+        BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] HBH Options have length {:d}", hbhLength);
         while (packetDataEgress < start + hbhLength) {
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Looping: At {:p}, under {:p}, type is {:x}", (void *)packetDataEgress, (void *)(start + hbhLength), *packetDataEgress);
+          BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Looping: At {:p}, under {:p}, type is {:x}", (void *)packetDataEgress, (void *)(start + hbhLength), *packetDataEgress);
           if (*packetDataEgress == RA_HBH_OPTION) {
             existsRAOption = true;
             packetDataEgress += 6; // type(8) + len(8) + padding(32) = 48 bits
             unsigned char route[16];
-            BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA data at location {:p}", (void*)packetDataEgress);
+            BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Inserting RA data at location {:p}", (void*)packetDataEgress);
             if (hadRARouteData) {
               for (int q = 0; q < (int)(nb_ra_registers); q++) {
                 memcpy(packetDataEgress, &ra_registers[16*q], 16);
@@ -859,16 +861,16 @@ SimpleSwitch::egress_thread(size_t worker_id) {
           *packetDataEgress += 13; // 16 * 6 + 8 = 104 octects / 8 = 13 8-octets length for RA HBH option
           sizeIPData += 40 + hbhLength; // size of IPv6 header + old size of HBH options
           packetDataEgress = start - 37; // back to IPv6 length
-	  unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
-	  length += 104;
-	  *(unsigned short *)packetDataEgress = htons(length);
+          unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
+          length += 104;
+          *(unsigned short *)packetDataEgress = htons(length);
           packetDataEgress = start + hbhLength;
-          char *packetDataNew = packet->prepend(104);
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
+          char *packetDataNew = packet_ra->prepend(104);
+          BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
                           sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
           memmove(packetDataNew, packetDataEgressStart, sizeIPData);
           packetDataEgress = packetDataNew + sizeIPData;
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA HBH option at {:p}", (void *)(packetDataEgress));
+          BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Inserting RA HBH option at {:p}", (void *)(packetDataEgress));
           *packetDataEgress = 1;
           *(packetDataEgress + 1) = 0;
           *(packetDataEgress + 2) = RA_HBH_OPTION;
@@ -889,16 +891,16 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         sizeIPData += 40; // size of IPv6 header
         *packetDataEgress = 0;
         packetDataEgress -= 2; // get back to len
-	unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
-	length += 104;
-	*(unsigned short *)packetDataEgress = htons(length);
+        unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
+        length += 104;
+        *(unsigned short *)packetDataEgress = htons(length);
         packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 288 bits
-        char *packetDataNew = packet->prepend(104);
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
+        char *packetDataNew = packet_ra->prepend(104);
+        BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
                         sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
         memmove(packetDataNew, packetDataEgressStart, sizeIPData);
         packetDataEgress = packetDataNew + sizeIPData;
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA HBH option at {:p}", (void *)(packetDataEgress));
+        BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Inserting RA HBH option at {:p}", (void *)(packetDataEgress));
         *packetDataEgress = nextHeader; // Set next in HBH options to what was in IPv6
         *(packetDataEgress + 1) = 12; // Set length of HBH options (13 - 1)
         *(packetDataEgress + 2) = RA_HBH_OPTION;
