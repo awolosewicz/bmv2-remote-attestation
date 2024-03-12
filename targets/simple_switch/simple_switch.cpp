@@ -812,13 +812,22 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     // Write RAP etype (testing, 34850, 0x8822)
     *(packetDataEgress++) = 136;
     *(packetDataEgress++) = 34;
+    //     char *packetDataNew = packet_ra->prepend(104);
+    //     BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
+    //                     sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
+    //     memmove(packetDataNew, packetDataEgressStart, sizeIPData);
+    //     packetDataEgress = packetDataNew + sizeIPData;
     sizeIPData += 2;
+    char *packetDataNew = packet_ra->prepend(96);
+    memmove(packetDataNew, packetDataEgressStart, sizeIPData);
+    packetDataEgress = packetDataNew + sizeIPData;
     for (int q = 0; q < (int)(nb_ra_registers); q++) {
       memcpy(packetDataEgress, &ra_registers[16*q], 16);
       memcpy(packetDataEgress + 48, &ra_registers[16*q], 16);
       packetDataEgress += 16;
-      sizeIPData += 16;
+      sizeIPData += 32;
     }
+    BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Truncating to {} bytes", sizeIPData);
     packet_ra->truncate(sizeIPData);
     // if (etype == 34525) { // IPv6, 0x86DD
     //   BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found IPv6 ethertype");
