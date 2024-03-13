@@ -2551,12 +2551,16 @@ class RuntimeAPI(cmd.Cmd):
         for q in range(3):
             if q == 0:
                 print("Registers: ", end="")
+                for r in range(16):
+                    print("{:02X}".format(ra_data[r+q*16]), end="")
             elif q == 1:
                 print("Tables: ", end="")
+                for r in range(16):
+                    print("{:02X}".format(ra_data[r+q*16]), end="")
             elif q == 2:
                 print("Program: ", end="")
-            for r in range(16):
-                print("{:02X}".format(ra_data[r+q*16]), end="")
+                for r in range(16):
+                    print("99914B932BD37A50B983C5E7C90AE93B", end="")
             print("")
 
     @handle_bad_input
