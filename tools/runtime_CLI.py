@@ -2559,8 +2559,7 @@ class RuntimeAPI(cmd.Cmd):
                     print("{:02X}".format(ra_data[r+q*16]), end="")
             elif q == 2:
                 print("Program: ", end="")
-                for r in range(16):
-                    print("99914B932BD37A50B983C5E7C90AE93B", end="")
+                print("99914B932BD37A50B983C5E7C90AE93B", end="")
             print("")
 
     @handle_bad_input
