@@ -1,20 +1,10 @@
 # BEHAVIORAL MODEL (bmv2) WITH REMOTE ATTESTATION
 
-This is a fork of the BMv2 P4 software reference switch implementing Remote Attestation features as discussed in "A Case for Remote Attestation in Programmable Dataplanes" by Nik Sultana, Deborah Shands, and Vinod Yegneswaran. The simple_switch target has been modified to generate an MD5 hash of the registers, table entries, and program whenever the respective structure is modified. These MD5 hashes can then be retrieved by running `get_ra_data` in the control plane or through inspection of IPv6 packets that have traversed the switches.
+This is a fork of the BMv2 P4 software reference switch implementing Remote Attestation features as discussed in "A Case for Remote Attestation in Programmable Dataplanes" by Nik Sultana, Deborah Shands, and Vinod Yegneswaran. The simple_switch target has been modified to generate an MD5 hash of the registers, table entries, and program whenever the respective structure is modified. These MD5 hashes can then be retrieved by running `get_ra_data`. 
 
-IPv6 packets which traverse the switch have hop-by-hop entries added which contain the MD5 hashes for the registers, table entries, and program of that switch, as well as structures which reflect on the entire path (the data of every switch XOR'd together). This is identified as hop-by-hop option 0x37, and the data is of the form
-- ID: 0x37
-- Length: 100
-- 16 bits of padding
-then the following six 16-byte entries:
-- switch registers
-- switch tables
-- switch program
-- route registers
-- route tables
-- route program.
-
-This modification should be installed on top of an existing BMv2 installation. See ra_to_base.sh for installing this after compiling.
+This branch varies from the main branch in that it was built to demonstrate such a switch running as a 5G UPF. It then has two major changes:
+- Rather than inject into all transiting IPv6 packets, it sends an ethernet broadcast containing the evidence out of port 0
+- Runtime_CLI has been modified to always print the same program data, to simulate the control plane software being compromised
 
 ## Dependencies
 
