@@ -65,6 +65,13 @@ using bm::Field;
 using bm::FieldList;
 using bm::packet_id_t;
 using bm::p4object_id_t;
+using bm::cxt_id_t;
+using bm::Data;
+using bm::ActionData;
+using bm::MatchEntry;
+using bm::MatchErrorCode;
+using bm::MatchKeyParam;
+using bm::entry_handle_t;
 
 struct HashNode {
   std::string key;
@@ -82,7 +89,7 @@ class HashList {
     return nullptr;
   }
 
-  void add(std::string nkey, unsigned char *nhash) {
+  void add(std::string nkey, unsigned char* nhash) {
     HashNode* node = (HashNode*)malloc(sizeof(HashNode));
     node->key = nkey;
     memcpy(node->hash, nhash, 16);
@@ -92,10 +99,12 @@ class HashList {
     }
   }
 
-  void recalc(HashNode* node) {
+  void set(HashNode* node, unsigned char* nhash) {
     for (int i = 0; i < 16, ++i) {
-      list_hash[i] += node->hash[i];
+      list_hash[i] -= node->hash[i];
+      list_hash[i] += nhash[i];
     }
+    memcpy(node->hash, nhash, 16);
   }
 }
 
@@ -196,15 +205,12 @@ class SimpleSwitch : public Switch {
       registers.add(register_name, reg_md5);
     }
     else {
-      regnode.key = register_name;
-      memcpy(regnode.hash, reg_md5, 16);
-      registers.recalc(regnode);
+      registers.set(regnode, reg_md5);
     }
     set_ra_registers(reg_md5, 0);
     return contexts.at(cxt_id).register_write(
         register_name, idx, std::move(value));
   }
-
   SimpleSwitch(const SimpleSwitch &) = delete;
   SimpleSwitch &operator =(const SimpleSwitch &) = delete;
   SimpleSwitch(SimpleSwitch &&) = delete;
