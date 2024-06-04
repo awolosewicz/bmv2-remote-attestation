@@ -54,6 +54,7 @@ using std::chrono::duration_cast;
 using ticks = std::chrono::nanoseconds;
 
 using bm::Switch;
+using bm::Context;
 using bm::Queue;
 using bm::Packet;
 using bm::PHV;
@@ -68,6 +69,7 @@ using bm::p4object_id_t;
 using bm::cxt_id_t;
 using bm::Data;
 using bm::ActionData;
+using bm::MatchTable;
 using bm::MatchEntry;
 using bm::MatchErrorCode;
 using bm::MatchKeyParam;
@@ -130,6 +132,7 @@ class SimpleSwitch : public Switch {
   // Remote Attestation registers
   static constexpr size_t nb_ra_registers = 3;
   unsigned char ra_registers[16*nb_ra_registers];
+  mutable boost::shared_mutex ra_mutex{};
 
  public:
   // by default, swapping is off
@@ -182,18 +185,8 @@ class SimpleSwitch : public Switch {
   unsigned char* get_ra_register(unsigned int idx);
   HashList registers;
   HashList tables;
-  void swap_notify_() override {
-    memcpy(get_ra_register(2), get_config_md5().data(), 16)
-  }
-
-  // Hook register_write to update the RA register for registers
-  // Read the entire register and MD5 hash it
-  // If we've encountered this register before, find it in hashlist and update
-  // Otherwise, add it to the list
-  RegisterErrorCode
-  register_write(cxt_id_t cxt_id,
-                 const std::string &register_name,
-                 const size_t idx, Data value) override {
+  void ra_update_reghash(cxt_id_t cxt_id, const std::string &register_name) {
+    boost::shard_lock<boost::shared_mutex> lock(ra_mutex);
     MD5_CTX reg_md5_ctx;
     MD5_INIT(&reg_md5_ctx);
     std::string tempstr = contexts.at(cxt_id).register_read_all(register_name)->get_string_repr();
@@ -207,10 +200,90 @@ class SimpleSwitch : public Switch {
     else {
       registers.set(regnode, reg_md5);
     }
-    set_ra_registers(reg_md5, 0);
-    return contexts.at(cxt_id).register_write(
-        register_name, idx, std::move(value));
+    set_ra_registers(registers.list_hash, 0);
   }
+  void ra_update_tblhash(const std::string &table_name) {
+    boost::shard_lock<boost::shared_mutex> lock(ra_mutex);
+    MD5_CTX tbl_md5_ctx;
+    MD5_INIT(&tbl_md5_ctx);
+    std::vector<MatchTable::Entry> tbl_entries = Context::mt_get_entries<MatchTable>(table_name);
+    MD5_Update(tbl_md5_ctx, tbl_entries.data(), tbl_entries.size());
+    unsigned char tbl_md5[16];
+    MD5_Final(tbl_md5, &tbl_md5_ctx);
+    HashNode tblnode = tables.find(table_name);
+    if (tblnode == nullptr) {
+      tables.add(table_name, tbl_md5);
+    }
+    else {
+      tables.set(tblnode, tbl_md5);
+    }
+    set_ra_registers(tables.list_hash, 1);
+  } 
+  void swap_notify_() override {
+    set_ra_registers(get_config_md5().data(), 2);
+    // memcpy(get_ra_register(2), get_config_md5().data(), 16);
+  }
+
+  // Hook register_write to update the RA register for registers
+  // Read the entire register and MD5 hash it
+  // If we've encountered this register before, find it in hashlist and update
+  // Otherwise, add it to the list
+  RegisterErrorCode
+  register_write(cxt_id_t cxt_id,
+                 const std::string &register_name,
+                 const size_t idx, Data value) override {
+    auto retval = contexts.at(cxt_id).register_write(
+        register_name, idx, std::move(value));
+    ra_update_reghash(cxt_id, register_name);
+    return retval;
+  }
+
+  MatchErrorCode
+  mt_clear_entries(cxt_id_t cxt_id,
+                   const std::string &table_name,
+                   bool reset_default_entry) override {
+    auto retval = contexts.at(cxt_id).mt_clear_entries(table_name,
+                                                reset_default_entry);
+    ra_update_tblhash(table_name);
+    return retval;
+  }
+
+  MatchErrorCode
+  mt_add_entry(cxt_id_t cxt_id,
+               const std::string &table_name,
+               const std::vector<MatchKeyParam> &match_key,
+               const std::string &action_name,
+               ActionData action_data,
+               entry_handle_t *handle,
+               int priority = -1  /*only used for ternary*/) override {
+    auto retval = contexts.at(cxt_id).mt_add_entry(
+        table_name, match_key, action_name,
+        std::move(action_data), handle, priority);
+    ra_update_tblhash(table_name);
+    return retval;
+  }
+
+  MatchErrorCode
+  mt_delete_entry(cxt_id_t cxt_id,
+                  const std::string &table_name,
+                  entry_handle_t handle) override {
+    auto retval = contexts.at(cxt_id).mt_delete_entry(table_name, handle);
+    ra_update_tblhash(table_name);
+    return retval;
+  }
+
+  MatchErrorCode
+  mt_modify_entry(cxt_id_t cxt_id,
+                  const std::string &table_name,
+                  entry_handle_t handle,
+                  const std::string &action_name,
+                  ActionData action_data) override {
+    auto retval = contexts.at(cxt_id).mt_modify_entry(
+        table_name, handle, action_name, std::move(action_data));
+    ra_update_tblhash(table_name);
+    return retval;
+  }
+
   SimpleSwitch(const SimpleSwitch &) = delete;
   SimpleSwitch &operator =(const SimpleSwitch &) = delete;
   SimpleSwitch(SimpleSwitch &&) = delete;
