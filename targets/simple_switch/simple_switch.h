@@ -28,6 +28,8 @@
 #include <bm/bm_sim/event_logger.h>
 #include <bm/bm_sim/simple_pre_lag.h>
 
+#include "md5.h"
+
 #include <memory>
 #include <chrono>
 #include <thread>
@@ -64,6 +66,39 @@ using bm::FieldList;
 using bm::packet_id_t;
 using bm::p4object_id_t;
 
+struct HashNode {
+  std::string key;
+  unsigned char hash[16];
+};
+
+class HashList {
+  std::vector<HashNode> list;
+  unsigned char list_hash[16] = {0};
+
+  void* find(std::string target) {
+    for (auto it = list.begin(), it != list.end(), ++it) {
+      if (it->key == target) return it;
+    }
+    return nullptr;
+  }
+
+  void add(std::string nkey, unsigned char *nhash) {
+    HashNode* node = (HashNode*)malloc(sizeof(HashNode));
+    node->key = nkey;
+    memcpy(node->hash, nhash, 16);
+    list.push_back(node);
+    for (int i = 0; i < 16, ++i) {
+      list_hash[i] += nhash[i];
+    }
+  }
+
+  void recalc(HashNode* node) {
+    for (int i = 0; i < 16, ++i) {
+      list_hash[i] += node->hash[i];
+    }
+  }
+}
+
 class SimpleSwitch : public Switch {
  public:
   using mirror_id_t = int;
@@ -83,9 +118,13 @@ class SimpleSwitch : public Switch {
  private:
   using clock = std::chrono::high_resolution_clock;
 
+  // Remote Attestation registers
+  static constexpr size_t nb_ra_registers = 3;
+  unsigned char ra_registers[16*nb_ra_registers];
+
  public:
   // by default, swapping is off
-  explicit SimpleSwitch(bool enable_swap = false,
+  explicit SimpleSwitch(bool enable_swap = true,
                         port_t drop_port = default_drop_port);
 
   ~SimpleSwitch();
@@ -127,6 +166,43 @@ class SimpleSwitch : public Switch {
 
   port_t get_drop_port() const {
     return drop_port;
+  }
+
+  // RA Register Access
+  void set_ra_registers(unsigned char *val, unsigned int idx);
+  unsigned char* get_ra_register(unsigned int idx);
+  HashList registers;
+  HashList tables;
+  void swap_notify_() override {
+    memcpy(get_ra_register(2), get_config_md5().data(), 16)
+  }
+
+  // Hook register_write to update the RA register for registers
+  // Read the entire register and MD5 hash it
+  // If we've encountered this register before, find it in hashlist and update
+  // Otherwise, add it to the list
+  RegisterErrorCode
+  register_write(cxt_id_t cxt_id,
+                 const std::string &register_name,
+                 const size_t idx, Data value) override {
+    MD5_CTX reg_md5_ctx;
+    MD5_INIT(&reg_md5_ctx);
+    std::string tempstr = contexts.at(cxt_id).register_read_all(register_name)->get_string_repr();
+    MD5_Update(&reg_md5_ctx, tempstr.data(), tempstr.size());
+    unsigned char reg_md5[16];
+    MD5_Final(reg_md5, &reg_md5_ctx);
+    HashNode regnode = registers.find(register_name);
+    if (regnode == nullptr) {
+      registers.add(register_name, reg_md5);
+    }
+    else {
+      regnode.key = register_name;
+      memcpy(regnode.hash, reg_md5, 16);
+      registers.recalc(regnode);
+    }
+    set_ra_registers(reg_md5, 0);
+    return contexts.at(cxt_id).register_write(
+        register_name, idx, std::move(value));
   }
 
   SimpleSwitch(const SimpleSwitch &) = delete;
