@@ -27,8 +27,7 @@
 #include <bm/bm_sim/switch.h>
 #include <bm/bm_sim/event_logger.h>
 #include <bm/bm_sim/simple_pre_lag.h>
-
-#include "md5.h"
+#include <src/bm_sim/md5.h>
 
 #include <memory>
 #include <chrono>
@@ -54,6 +53,7 @@ using std::chrono::duration_cast;
 using ticks = std::chrono::nanoseconds;
 
 using bm::Switch;
+using bm::SwitchWContexts;
 using bm::Context;
 using bm::Queue;
 using bm::Packet;
@@ -81,34 +81,27 @@ struct HashNode {
 };
 
 class HashList {
-  std::vector<HashNode> list;
-  unsigned char list_hash[16] = {0};
-
-  void* find(std::string target) {
-    for (auto it = list.begin(), it != list.end(), ++it) {
-      if (it->key == target) return it;
+ public:
+  std::unordered_map<std::string, unsigned char*> map{};
+  unsigned char total_hash[16] = {0};
+  
+  void update(std::string nkey, unsigned char* nhash) {
+    auto it = map.find(nkey);
+    if (it == map.end()) {
+      map.insert({nkey, nhash});
+      for (int i = 0; i < 16; ++i) {
+        total_hash[16] += nhash[i];
+      }
     }
-    return nullptr;
-  }
-
-  void add(std::string nkey, unsigned char* nhash) {
-    HashNode* node = (HashNode*)malloc(sizeof(HashNode));
-    node->key = nkey;
-    memcpy(node->hash, nhash, 16);
-    list.push_back(node);
-    for (int i = 0; i < 16, ++i) {
-      list_hash[i] += nhash[i];
+    else {
+      for (int i = 0; i < 16; ++i) {
+        total_hash[i] -= it->second[i];
+        total_hash[i] += nhash[i];
+      }
+      memcpy(it->second, nhash, 16);
     }
   }
-
-  void set(HashNode* node, unsigned char* nhash) {
-    for (int i = 0; i < 16, ++i) {
-      list_hash[i] -= node->hash[i];
-      list_hash[i] += nhash[i];
-    }
-    memcpy(node->hash, nhash, 16);
-  }
-}
+};
 
 class SimpleSwitch : public Switch {
  public:
@@ -132,7 +125,8 @@ class SimpleSwitch : public Switch {
   // Remote Attestation registers
   static constexpr size_t nb_ra_registers = 3;
   unsigned char ra_registers[16*nb_ra_registers];
-  mutable boost::shared_mutex ra_mutex{};
+  mutable boost::shared_mutex ra_reg_mutex{};
+  mutable boost::shared_mutex ra_tbl_mutex{};
 
  public:
   // by default, swapping is off
@@ -183,45 +177,30 @@ class SimpleSwitch : public Switch {
   // RA Register Access
   void set_ra_registers(unsigned char *val, unsigned int idx);
   unsigned char* get_ra_register(unsigned int idx);
-  HashList registers;
-  HashList tables;
+  HashList registers_ra;
+  HashList tables_ra;
+
   void ra_update_reghash(cxt_id_t cxt_id, const std::string &register_name) {
-    boost::shard_lock<boost::shared_mutex> lock(ra_mutex);
+    boost::unique_lock<boost::shared_mutex> lock(ra_reg_mutex);
     MD5_CTX reg_md5_ctx;
-    MD5_INIT(&reg_md5_ctx);
-    std::string tempstr = contexts.at(cxt_id).register_read_all(register_name)->get_string_repr();
-    MD5_Update(&reg_md5_ctx, tempstr.data(), tempstr.size());
+    MD5_Init(&reg_md5_ctx);
+    std::vector<Data> register_array = register_read_all(cxt_id, register_name);
+    MD5_Update(&reg_md5_ctx, register_array.data(), register_array.size());
     unsigned char reg_md5[16];
     MD5_Final(reg_md5, &reg_md5_ctx);
-    HashNode regnode = registers.find(register_name);
-    if (regnode == nullptr) {
-      registers.add(register_name, reg_md5);
-    }
-    else {
-      registers.set(regnode, reg_md5);
-    }
-    set_ra_registers(registers.list_hash, 0);
+    registers_ra.update(register_name, reg_md5);
+    set_ra_registers(registers_ra.total_hash, 0);
   }
-  void ra_update_tblhash(const std::string &table_name) {
-    boost::shard_lock<boost::shared_mutex> lock(ra_mutex);
+  void ra_update_tblhash(cxt_id_t cxt_id, const std::string &table_name) {
+    boost::unique_lock<boost::shared_mutex> lock(ra_tbl_mutex);
     MD5_CTX tbl_md5_ctx;
-    MD5_INIT(&tbl_md5_ctx);
-    std::vector<MatchTable::Entry> tbl_entries = Context::mt_get_entries<MatchTable>(table_name);
-    MD5_Update(tbl_md5_ctx, tbl_entries.data(), tbl_entries.size());
+    MD5_Init(&tbl_md5_ctx);
+    std::vector<MatchTable::Entry> tbl_entries = mt_get_entries(cxt_id, table_name);
+    MD5_Update(&tbl_md5_ctx, tbl_entries.data(), tbl_entries.size());
     unsigned char tbl_md5[16];
     MD5_Final(tbl_md5, &tbl_md5_ctx);
-    HashNode tblnode = tables.find(table_name);
-    if (tblnode == nullptr) {
-      tables.add(table_name, tbl_md5);
-    }
-    else {
-      tables.set(tblnode, tbl_md5);
-    }
-    set_ra_registers(tables.list_hash, 1);
-  } 
-  void swap_notify_() override {
-    set_ra_registers(get_config_md5().data(), 2);
-    // memcpy(get_ra_register(2), get_config_md5().data(), 16);
+    tables_ra.update(table_name, tbl_md5);
+    set_ra_registers(tables_ra.total_hash, 1);
   }
 
   // Hook register_write to update the RA register for registers
@@ -231,20 +210,18 @@ class SimpleSwitch : public Switch {
   RegisterErrorCode
   register_write(cxt_id_t cxt_id,
                  const std::string &register_name,
-                 const size_t idx, Data value) override {
-    auto retval = contexts.at(cxt_id).register_write(
-        register_name, idx, std::move(value));
+                 const size_t idx, Data value) {
+    auto retval = Switch::register_write(cxt_id, register_name, idx, value);
     ra_update_reghash(cxt_id, register_name);
     return retval;
   }
 
   MatchErrorCode
   mt_clear_entries(cxt_id_t cxt_id,
-                   const std::string &table_name,
-                   bool reset_default_entry) override {
-    auto retval = contexts.at(cxt_id).mt_clear_entries(table_name,
-                                                reset_default_entry);
-    ra_update_tblhash(table_name);
+                    const std::string &table_name,
+                    bool reset_default_entry) {
+    auto retval = Switch::mt_clear_entries(cxt_id, table_name, reset_default_entry);
+    ra_update_tblhash(cxt_id, table_name);
     return retval;
   }
 
@@ -255,20 +232,20 @@ class SimpleSwitch : public Switch {
                const std::string &action_name,
                ActionData action_data,
                entry_handle_t *handle,
-               int priority = -1  /*only used for ternary*/) override {
-    auto retval = contexts.at(cxt_id).mt_add_entry(
-        table_name, match_key, action_name,
+               int priority = -1  /*only used for ternary*/) {
+    auto retval = Switch::mt_add_entry(
+        cxt_id, table_name, match_key, action_name,
         std::move(action_data), handle, priority);
-    ra_update_tblhash(table_name);
+    ra_update_tblhash(cxt_id, table_name);
     return retval;
   }
 
   MatchErrorCode
   mt_delete_entry(cxt_id_t cxt_id,
                   const std::string &table_name,
-                  entry_handle_t handle) override {
-    auto retval = contexts.at(cxt_id).mt_delete_entry(table_name, handle);
-    ra_update_tblhash(table_name);
+                  entry_handle_t handle) {
+    auto retval = Switch::mt_delete_entry(cxt_id, table_name, handle);
+    ra_update_tblhash(cxt_id, table_name);
     return retval;
   }
 
@@ -278,9 +255,9 @@ class SimpleSwitch : public Switch {
                   entry_handle_t handle,
                   const std::string &action_name,
                   ActionData action_data) override {
-    auto retval = contexts.at(cxt_id).mt_modify_entry(
+    auto retval = Switch::mt_modify_entry(cxt_id,
         table_name, handle, action_name, std::move(action_data));
-    ra_update_tblhash(table_name);
+    ra_update_tblhash(cxt_id, table_name);
     return retval;
   }
 

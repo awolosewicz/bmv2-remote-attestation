@@ -289,6 +289,7 @@ SimpleSwitch::swap_notify_() {
   bm::Logger::get()->debug(
       "simple_switch target has been notified of a config swap");
   check_queueing_metadata();
+  set_ra_registers((unsigned char*)(get_config_md5().data()), 2);
 }
 
 SimpleSwitch::~SimpleSwitch() {

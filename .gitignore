@@ -65,7 +65,6 @@ depcomp
 install-sh
 missing
 stamp-h1
-targets/simple_router/simple_router
 test-driver
 .dirstamp
 tests/test_*
