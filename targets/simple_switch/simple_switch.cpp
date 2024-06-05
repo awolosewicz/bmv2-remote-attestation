@@ -1,4 +1,5 @@
 /* Copyright 2013-present Barefoot Networks, Inc.
+ * Copyright 2021 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  */
 
 /*
- * Antonin Bas (antonin@barefootnetworks.com)
+ * Antonin Bas
  *
  */
 
@@ -27,16 +28,15 @@
 
 #include <condition_variable>
 #include <deque>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <mutex>
 #include <string>
-#include <arpa/inet.h>
+#include <unordered_map>
+#include <utility>
 
 #include "simple_switch.h"
 #include "register_access.h"
-
-#define RA_HBH_OPTION 0x37
 
 namespace {
 
@@ -116,7 +116,7 @@ class SimpleSwitch::MirroringSessions {
 };
 
 // Arbitrates which packets are processed by the ingress thread. Resubmit and
-// recirculate packets go to a high priority queue, while normal pakcets go to a
+// recirculate packets go to a high priority queue, while normal packets go to a
 // low priority queue. We assume that starvation is not going to be a problem.
 // Resubmit packets are dropped if the queue is full in order to make sure the
 // ingress thread cannot deadlock. We do the same for recirculate packets even
@@ -230,16 +230,11 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
   add_required_field("standard_metadata", "egress_spec");
   add_required_field("standard_metadata", "egress_port");
 
-  add_required_field("standard_metadata", "ra_registers");
-  add_required_field("standard_metadata", "ra_tables");
-  add_required_field("standard_metadata", "ra_program");
-
   force_arith_header("standard_metadata");
   force_arith_header("queueing_metadata");
   force_arith_header("intrinsic_metadata");
 
   import_primitives(this);
-  init_ra_registers(0);
 }
 
 int
@@ -265,9 +260,6 @@ SimpleSwitch::receive_(port_t port_num, const char *buffer, int len) {
   // each add_header / remove_header primitive call
   packet->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX, len);
   phv->get_field("standard_metadata.packet_length").set(len);
-  phv->get_field("standard_metadata.ra_registers").set((char *)&ra_registers[0], 16);
-  phv->get_field("standard_metadata.ra_tables").set((char *)&ra_registers[16], 16);
-  phv->get_field("standard_metadata.ra_program").set((char *)&ra_registers[32], 16);
   Field &f_instance_type = phv->get_field("standard_metadata.instance_type");
   f_instance_type.set(PKT_INSTANCE_TYPE_NORMAL);
 
@@ -381,6 +373,20 @@ void
 SimpleSwitch::set_transmit_fn(TransmitFn fn) {
   my_transmit_fn = std::move(fn);
 }
+
+
+// RA Register Access
+void 
+SimpleSwitch::set_ra_registers(unsigned char *val, unsigned int idx) {
+  idx *= 16; //0-15 for registers, 16-31 for tables, 32-48 for program
+  memcpy(&ra_registers[idx], val, 16);
+}
+unsigned char* 
+SimpleSwitch::get_ra_register(unsigned int idx) {
+  idx *= 16;
+  return &ra_registers[idx];
+}
+
 
 void
 SimpleSwitch::transmit_thread() {
@@ -510,59 +516,6 @@ SimpleSwitch::ingress_thread() {
        parser leave the buffer unchanged, and move the pop logic to the
        deparser. TODO? */
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
-
-    char *packetDataIngress = packet->data();
-    hadRARouteData = false;
-    //First offset = 6 + 6
-    //48 bits for dst MAC, 48 for src MAC, arrive at ethertype
-    //the first Layer 1 64 bits are not included in the packet data
-    //for (int i = 0; i < 20; i++) {
-    //  BMLOG_DEBUG_PKT(*packet, "Byte is value {}", *(packetDataIngress + i));
-    //}
-    packetDataIngress += 12;
-    unsigned short etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
-    BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Beginning pre-parse, etype is {}", etype);
-    if (etype == 34984) { // 802.1Q double, 0x88A8
-      BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q double");
-      packetDataIngress += 8;
-      etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
-    }
-    else if (etype == 33024) { // 802.1Q single, 0x8100
-      BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found ethertype 802.1Q single");
-      packetDataIngress += 4;
-      etype = (short)(*packetDataIngress << 8) | (short)(255 & *(packetDataIngress + 1));
-    }
-    if (etype == 34525) { // IPv6, 0x86DD
-      BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 ethertype");
-      packetDataIngress += 8; // etype (2) + ver(4) + class(8) + flow (20) + len(16) = 48 bits
-      unsigned char nextHeader = *packetDataIngress;
-      if (nextHeader == 0) {
-        BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found IPv6 HBH Options");
-        packetDataIngress += 35; // nextHeader(8) + hops(8) + src(128) + dst(128) + nextHeader(8) = 280 bits
-        unsigned short hbhLength = ((unsigned short)(*packetDataIngress) * 8) + 8; //length is 8-octet units beyond the first 8
-        char *start = packetDataIngress;
-        packetDataIngress += 1;
-        BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] HBH Options have length {:d}", hbhLength);
-        while (packetDataIngress < start + hbhLength) {
-          BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Looping: At {:p}, under {:p}, type is {:x}", (void *)packetDataIngress, (void *)(start + hbhLength), *packetDataIngress);
-          if (*packetDataIngress == RA_HBH_OPTION) {
-            BMLOG_DEBUG_PKT(*packet, "[RA Pre-Parse] Found RA HBH Option");
-            hadRARouteData = true;
-            packetDataIngress += 54; // type(8) + len(8) + padding(32) + first 3 RA(384) = 432 bits
-            memcpy(&route_data[0], packetDataIngress, 48);
-            break;
-          }
-          else if (*packetDataIngress == 0) {
-            packetDataIngress += 1;
-          }
-          else {
-            packetDataIngress += 1;
-            packetDataIngress += ((unsigned short)(*packetDataIngress) * 8) + 1;
-          }
-        }
-      }
-    }
-
     parser->parse(packet.get());
 
     if (phv->has_field("standard_metadata.parser_error")) {
@@ -653,10 +606,15 @@ SimpleSwitch::ingress_thread() {
       // TODO(antonin): a copy is not needed here, but I don't yet have an
       // optimized way of doing this
       std::unique_ptr<Packet> packet_copy = packet->clone_no_phv_ptr();
+      PHV *phv_copy = packet_copy->get_phv();
       copy_field_list_and_set_type(packet, packet_copy,
                                    PKT_INSTANCE_TYPE_RESUBMIT,
                                    field_list_id);
       RegisterAccess::clear_all(packet_copy.get());
+      packet_copy->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX,
+                                ingress_packet_size);
+      phv_copy->get_field("standard_metadata.packet_length")
+          .set(ingress_packet_size);
       input_buffer->push_front(
           InputBuffer::PacketType::RESUBMIT, std::move(packet_copy));
       continue;
@@ -762,6 +720,11 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         field_list->copy_fields_between_phvs(phv_copy, phv);
         phv_copy->get_field("standard_metadata.instance_type")
             .set(PKT_INSTANCE_TYPE_EGRESS_CLONE);
+        auto packet_size =
+            packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX);
+        RegisterAccess::clear_all(packet_copy.get());
+        packet_copy->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX,
+                                  packet_size);
         if (config.mgid_valid) {
           BMLOG_DEBUG_PKT(*packet, "Cloning packet to MGID {}", config.mgid);
           multicast(packet_copy.get(), config.mgid);
@@ -769,7 +732,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         if (config.egress_port_valid) {
           BMLOG_DEBUG_PKT(*packet, "Cloning packet to egress port {}",
                           config.egress_port);
-          RegisterAccess::clear_all(packet_copy.get());
           enqueue(config.egress_port, std::move(packet_copy));
         }
       }
@@ -783,138 +745,46 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     deparser->deparse(packet.get());
-    char *packetDataEgress = packet->data();
+
+    // Post-Deparse add RA data to an ethernet broadcast egressing on port 0
+    std::unique_ptr<Packet> packet_ra = packet->clone_with_phv_ptr();
+    packet_ra->set_egress_port(0);
+    char *packetDataEgress = packet_ra->data();
     char *packetDataEgressStart = packetDataEgress;
-    packetDataEgress += 12; // dst(48) + src(48) = 96 bits
+    // Set destination MAC to ff:ff:ff:ff:ff:ff
+    for (int i = 0; i < 6; i++) {
+      *packetDataEgress = 255;
+      packetDataEgress += 1;
+    }
+    packetDataEgress += 6; // src = 48 bits = 6 bytes
     unsigned short etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
 
-    BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
+    BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
     size_t sizeIPData = 12;
     if (etype == 34984) { // 802.1Q double, 0x88A8
-      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q double");
+      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q double");
       sizeIPData += 8;
       packetDataEgress += 8;
-      etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
     }
     else if (etype == 33024) { // 802.1Q single, 0x8100
-      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found ethertype 802.1Q single");
+      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q single");
       sizeIPData += 4;
       packetDataEgress += 4;
-      etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
     }
+    // Write attestation etype (testing, 34850, 0x8822)
+    *(packetDataEgress++) = 136;
+    *(packetDataEgress++) = 34;
     sizeIPData += 2;
-    if (etype == 34525) { // IPv6, 0x86DD
-      BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 ethertype");
-      packetDataEgress += 8; // etype(16) + ver(4) + class(8) + flow (20) + len(16) = 64 bits
-      unsigned char nextHeader = *packetDataEgress;
-      if (nextHeader == 0) {
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Found IPv6 HBH Options");
-        packetDataEgress += 35; // next(8) + hops(8) + src(128) + dst(128) + next(8) = 280 bits
-        unsigned char hbhLength = ((unsigned short)(*packetDataEgress) * 8) + 8; //length is 8-octet units beyond the first 8
-        char *start = packetDataEgress;
-        packetDataEgress += 1;
-        bool existsRAOption = false;
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] HBH Options have length {:d}", hbhLength);
-        while (packetDataEgress < start + hbhLength) {
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Looping: At {:p}, under {:p}, type is {:x}", (void *)packetDataEgress, (void *)(start + hbhLength), *packetDataEgress);
-          if (*packetDataEgress == RA_HBH_OPTION) {
-            existsRAOption = true;
-            packetDataEgress += 6; // type(8) + len(8) + padding(32) = 48 bits
-            unsigned char route[16];
-            BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA data at location {:p}", (void*)packetDataEgress);
-            if (hadRARouteData) {
-              for (int q = 0; q < (int)(nb_ra_registers); q++) {
-                memcpy(packetDataEgress, &ra_registers[16*q], 16);
-                memcpy(&route[0], &route_data[16*q], 16);
-                for (int r = 0; r < 16; r++) {
-                  route[r] ^= ra_registers[16*q + r];
-                }
-                memcpy(packetDataEgress + 48, &route[0], 16);
-                packetDataEgress += 16;
-              }
-            }
-            else {
-              for (int q = 0; q < (int)(nb_ra_registers); q++) {
-                memcpy(packetDataEgress, &ra_registers[16*q], 16);
-                memcpy(&route[0], packetDataEgress + 48, 16);
-                for (int r = 0; r < 16; r++) {
-                  route[r] ^= ra_registers[16*q + r];
-                }
-                memcpy(packetDataEgress + 48, &route[0], 16);
-                packetDataEgress += 16;
-              }
-            }
-            break;
-          }
-          else if (*packetDataEgress == 0) {
-            packetDataEgress += 1;
-          }
-          else {
-            packetDataEgress += 1;
-            packetDataEgress += ((unsigned short)(*packetDataEgress) * 8) + 1;
-          }
-        }
-        if (!existsRAOption) {
-          packetDataEgress = start;
-          *packetDataEgress += 13; // 16 * 6 + 8 = 104 octects / 8 = 13 8-octets length for RA HBH option
-          sizeIPData += 40 + hbhLength; // size of IPv6 header + old size of HBH options
-          packetDataEgress = start - 37; // back to IPv6 length
-	  unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
-	  length += 104;
-	  *(unsigned short *)packetDataEgress = htons(length);
-          packetDataEgress = start + hbhLength;
-          char *packetDataNew = packet->prepend(104);
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
-                          sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
-          memmove(packetDataNew, packetDataEgressStart, sizeIPData);
-          packetDataEgress = packetDataNew + sizeIPData;
-          BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA HBH option at {:p}", (void *)(packetDataEgress));
-          *packetDataEgress = 1;
-          *(packetDataEgress + 1) = 0;
-          *(packetDataEgress + 2) = RA_HBH_OPTION;
-          *(packetDataEgress + 3) = 100;
-          *(packetDataEgress + 4) = 0;
-          *(packetDataEgress + 4) = 0;
-          *(packetDataEgress + 4) = 0;
-          *(packetDataEgress + 4) = 0;
-          packetDataEgress += 8;
-          for (int q = 0; q < (int)(nb_ra_registers); q++) {
-            memcpy(packetDataEgress, &ra_registers[16*q], 16);
-            memcpy(packetDataEgress + 48, &ra_registers[16*q], 16);
-            packetDataEgress += 16;
-          }
-        }
-      }
-      else {
-        sizeIPData += 40; // size of IPv6 header
-        *packetDataEgress = 0;
-        packetDataEgress -= 2; // get back to len
-	unsigned short length = ntohs(*(unsigned short *)packetDataEgress);
-	length += 104;
-	*(unsigned short *)packetDataEgress = htons(length);
-        packetDataEgress += 36; // len(16) + next(8) + hops(8) + src(128) + dst(128) = 288 bits
-        char *packetDataNew = packet->prepend(104);
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Moving {} bytes of data to new start {:p} from old start {:p}",
-                        sizeIPData, (void *)(packetDataNew), (void *)(packetDataEgressStart));
-        memmove(packetDataNew, packetDataEgressStart, sizeIPData);
-        packetDataEgress = packetDataNew + sizeIPData;
-        BMLOG_DEBUG_PKT(*packet, "[RA Post-Deparse] Inserting RA HBH option at {:p}", (void *)(packetDataEgress));
-        *packetDataEgress = nextHeader; // Set next in HBH options to what was in IPv6
-        *(packetDataEgress + 1) = 12; // Set length of HBH options (13 - 1)
-        *(packetDataEgress + 2) = RA_HBH_OPTION;
-        *(packetDataEgress + 3) = 100;
-        *(packetDataEgress + 4) = 0;
-        *(packetDataEgress + 4) = 0;
-        *(packetDataEgress + 4) = 0;
-        *(packetDataEgress + 4) = 0;
-        packetDataEgress += 8;
-        for (int q = 0; q < (int)(nb_ra_registers); q++) {
-          memcpy(packetDataEgress, &ra_registers[16*q], 16);
-          memcpy(packetDataEgress + 48, &ra_registers[16*q], 16);
-          packetDataEgress += 16;
-        }
-      }
+    char *packetDataNew = packet_ra->prepend(96);
+    memmove(packetDataNew, packetDataEgressStart, sizeIPData);
+    packetDataEgress = packetDataNew + sizeIPData;
+    for (int q = 0; q < (int)(nb_ra_registers); q++) {
+      memcpy(packetDataEgress, SimpleSwitch::get_ra_register(q), 16);
+      packetDataEgress += 16;
+      sizeIPData += 16;
     }
+    BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Truncating to {} bytes", sizeIPData);
+    packet_ra->truncate(sizeIPData);
 
     // RECIRCULATE
     auto recirculate_flag = RegisterAccess::get_recirculate_flag(packet.get());
