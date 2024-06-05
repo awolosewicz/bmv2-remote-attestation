@@ -815,5 +815,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     output_buffer.push_front(std::move(packet));
+    output_buffer.push_front(std::move(packet_ra));
   }
 }
