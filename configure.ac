@@ -291,13 +291,9 @@ AC_CONFIG_FILES([Makefile
 		src/bm_apps/examples/Makefile
 		targets/Makefile
 		targets/simple_router/Makefile
-		targets/l2_switch/Makefile
-		targets/l2_switch/learn_client/Makefile
 		targets/simple_switch/Makefile
 		targets/simple_switch/tests/Makefile
 		targets/simple_switch/tests/CLI_tests/Makefile
-		targets/psa_switch/Makefile
-		targets/psa_switch/tests/Makefile
 		tests/Makefile
 		tests/stress_tests/Makefile
                 tools/Makefile
