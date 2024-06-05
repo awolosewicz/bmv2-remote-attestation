@@ -1,1 +1,1 @@
-SUBDIRS = $(MAYBE_SECONDARY_TARGETS) simple_switch
+SUBDIRS = simple_switch

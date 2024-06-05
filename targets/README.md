@@ -54,6 +54,41 @@ References:
   `simple_switch`.
 
 
-## `simple_switch_ra`
+## `simple_switch_grpc`
 
 This target is based on the `simple_switch` target described above.
+The primary difference is that `simple_switch_grpc` can also accept
+TCP connections from a controller, where the format of control
+messages on this connection are defined by the [P4Runtime API
+specification](https://github.com/p4lang/p4runtime).
+
+`simple_switch_grpc` can still also accept connections from
+controllers using the Thrift API, but this is primarily intended for
+debug purposes.  It is recommended that you do _not_ attempt to have
+multiple controllers controlling the same target device, one
+controller using the Thrift API, and another using the P4Runtime API.
+This is not intended to be a useful mode of operation.
+
+
+## `psa_switch`
+
+This target is similar to the `simple_switch` described above, except
+that `psa_switch` does not use the `v1model` P4_16 architecture, but
+instead the [Portable Switch Architecture](https://p4.org/specs/)
+(PSA).
+
+As of November 2018 the implementation is not yet complete.  Anyone
+interested in helping to complete the implementation (which also
+requires additional work in the [P4 compiler
+`p4c`](https://github.com/p4lang/p4c)) should create an issue in this
+Github repository, or the one for `p4c`.
+
+
+## `simple_router` and `l2_switch`
+
+These targets were introduced to illustrate how the bmv2 library can
+be leveraged to implement different architectures.  They support much
+smaller sets of standard metadata, and `simple_router` does not have
+an egress control flow.  There is no good reason to use these targets
+over `simple_switch` as of November 2018, and they cannot be used with
+P4_16 programs.
