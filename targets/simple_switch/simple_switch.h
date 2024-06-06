@@ -232,6 +232,24 @@ class SimpleSwitch : public Switch {
     return retval;
   }
 
+  RegisterErrorCode
+  register_write_range(cxt_id_t cxt_id,
+                       const std::string &register_name,
+                       const size_t start, const size_t end,
+                       Data value) override {
+    auto retval = Switch::register_write_range(cxt_id,
+        register_name, start, end, std::move(value));
+    ra_update_reghash(cxt_id, register_name);
+    return retval;
+  }
+
+  RegisterErrorCode
+  register_reset(cxt_id_t cxt_id, const std::string &register_name) override {
+    auto retval = Switch::register_reset(cxt_id, register_name);
+    ra_update_reghash(cxt_id, register_name);
+    return retval;
+  }
+
   MatchErrorCode
   mt_clear_entries(cxt_id_t cxt_id,
                     const std::string &table_name,
