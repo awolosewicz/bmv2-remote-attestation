@@ -282,6 +282,7 @@ SimpleSwitch::start_and_return_() {
     threads_.push_back(std::thread(&SimpleSwitch::egress_thread, this, i));
   }
   threads_.push_back(std::thread(&SimpleSwitch::transmit_thread, this));
+  ra_update_proghash();
 }
 
 void

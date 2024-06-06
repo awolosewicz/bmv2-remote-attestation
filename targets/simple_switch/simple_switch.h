@@ -222,7 +222,17 @@ class SimpleSwitch : public Switch {
     set_ra_registers(tables_ra.total_hash, 1);
   }
 
-  // Hook Register/Table modifying functions so they update the hashes post-update
+  void ra_update_proghash() {
+    MD5_CTX prog_md5_ctx;
+    MD5_Init(&prog_md5_ctx);
+    std::string current_config = get_config();
+    MD5_Update(&prog_md5_ctx, current_config.data(), current_config.size());
+    unsigned char prog_md5[16];
+    MD5_Final(prog_md5, &prog_md5_ctx);
+    set_ra_registers(prog_md5, 2);
+  }
+
+  // Hook Register/Table/Program modifying functions so they update the hashes post-update
   RegisterErrorCode
   register_write(cxt_id_t cxt_id,
                  const std::string &register_name,
@@ -292,6 +302,13 @@ class SimpleSwitch : public Switch {
     auto retval = Switch::mt_modify_entry(cxt_id,
         table_name, handle, action_name, std::move(action_data));
     ra_update_tblhash(cxt_id, table_name);
+    return retval;
+  }
+
+  RuntimeInterface::ErrorCode
+  swap_configs() {
+    auto retval = Switch::swap_configs();
+    ra_update_proghash();
     return retval;
   }
 
