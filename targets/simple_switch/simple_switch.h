@@ -53,7 +53,6 @@ using std::chrono::duration_cast;
 using ticks = std::chrono::nanoseconds;
 
 using bm::Switch;
-using bm::SwitchWContexts;
 using bm::Context;
 using bm::Queue;
 using bm::Packet;
@@ -75,11 +74,6 @@ using bm::MatchErrorCode;
 using bm::MatchKeyParam;
 using bm::entry_handle_t;
 
-struct HashNode {
-  std::string key;
-  unsigned char hash[16];
-};
-
 class HashList {
  public:
   std::unordered_map<std::string, unsigned char*> map{};
@@ -88,9 +82,11 @@ class HashList {
   void update(std::string nkey, unsigned char* nhash) {
     auto it = map.find(nkey);
     if (it == map.end()) {
-      map.insert({nkey, nhash});
+      unsigned char *shash = (unsigned char*)malloc(16);
+      memcpy(shash, nhash, 16);
+      map.insert({nkey, shash});
       for (int i = 0; i < 16; ++i) {
-        total_hash[16] += nhash[i];
+        total_hash[i] += nhash[i];
       }
     }
     else {
@@ -180,33 +176,41 @@ class SimpleSwitch : public Switch {
   HashList registers_ra;
   HashList tables_ra;
 
+  // Get MD5 of register through hashing all the register elements
+  // Uses binary representation of Data to avoid unknown of using Data directly
   void ra_update_reghash(cxt_id_t cxt_id, const std::string &register_name) {
     boost::unique_lock<boost::shared_mutex> lock(ra_reg_mutex);
     MD5_CTX reg_md5_ctx;
     MD5_Init(&reg_md5_ctx);
     std::vector<Data> register_array = register_read_all(cxt_id, register_name);
-    MD5_Update(&reg_md5_ctx, register_array.data(), register_array.size());
+    for (auto it = register_array.begin(); it != register_array.end(); ++it) {
+      std::string reg_str = it->get_string();
+      MD5_Update(&reg_md5_ctx, reg_str.data(), reg_str.size());
+    }
     unsigned char reg_md5[16];
     MD5_Final(reg_md5, &reg_md5_ctx);
     registers_ra.update(register_name, reg_md5);
     set_ra_registers(registers_ra.total_hash, 0);
   }
+  // Get MD5 of tables through hashing all the entries
+  // Must set the time attributes of the entries to 0 so similar entries hash similarly
   void ra_update_tblhash(cxt_id_t cxt_id, const std::string &table_name) {
     boost::unique_lock<boost::shared_mutex> lock(ra_tbl_mutex);
     MD5_CTX tbl_md5_ctx;
     MD5_Init(&tbl_md5_ctx);
     std::vector<MatchTable::Entry> tbl_entries = mt_get_entries(cxt_id, table_name);
-    MD5_Update(&tbl_md5_ctx, tbl_entries.data(), tbl_entries.size());
+    for (auto it = tbl_entries.begin(); it != tbl_entries.end(); ++it) {
+      it->timeout_ms = 0;
+      it->time_since_hit_ms = 0;
+    }
+    MD5_Update(&tbl_md5_ctx, tbl_entries.data(), tbl_entries.size() * sizeof(MatchTable::Entry));
     unsigned char tbl_md5[16];
     MD5_Final(tbl_md5, &tbl_md5_ctx);
     tables_ra.update(table_name, tbl_md5);
     set_ra_registers(tables_ra.total_hash, 1);
   }
 
-  // Hook register_write to update the RA register for registers
-  // Read the entire register and MD5 hash it
-  // If we've encountered this register before, find it in hashlist and update
-  // Otherwise, add it to the list
+  // Hook Register/Table modifying functions so they update the hashes post-update
   RegisterErrorCode
   register_write(cxt_id_t cxt_id,
                  const std::string &register_name,

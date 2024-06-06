@@ -779,7 +779,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     memmove(packetDataNew, packetDataEgressStart, sizeIPData);
     packetDataEgress = packetDataNew + sizeIPData;
     for (int q = 0; q < (int)(nb_ra_registers); q++) {
-      memcpy(packetDataEgress, SimpleSwitch::get_ra_register(q), 16);
+      memcpy(packetDataEgress, get_ra_register(q), 16);
       packetDataEgress += 16;
       sizeIPData += 16;
     }
