@@ -193,17 +193,29 @@ class SimpleSwitch : public Switch {
     set_ra_registers(registers_ra.total_hash, 0);
   }
   // Get MD5 of tables through hashing all the entries
-  // Must set the time attributes of the entries to 0 so similar entries hash similarly
+  // AN entry, in this case, is the match key(s), associated function, and function data
   void ra_update_tblhash(cxt_id_t cxt_id, const std::string &table_name) {
     boost::unique_lock<boost::shared_mutex> lock(ra_tbl_mutex);
     MD5_CTX tbl_md5_ctx;
     MD5_Init(&tbl_md5_ctx);
     std::vector<MatchTable::Entry> tbl_entries = mt_get_entries(cxt_id, table_name);
     for (auto it = tbl_entries.begin(); it != tbl_entries.end(); ++it) {
-      it->timeout_ms = 0;
-      it->time_since_hit_ms = 0;
+      // Match Key
+      std::vector<bm::MatchKeyParam> mt_key = it->match_key;
+      for (auto it_key = mt_key.begin(); it_key != mt_key.end(); ++it_key) {
+        MD5_Update(&tbl_md5_ctx, it_key->key.data(), it_key->key.size());
+        MD5_Update(&tbl_md5_ctx, it_key->mask.data(), it_key->mask.size());
+      }
+      // Action Data
+      bm::ActionData act_data = it->action_data;
+      for (size_t q = 0; q < act_data.size(); ++q) {
+        std::string act_str = act_data.get(q).get_string();
+        MD5_Update(&tbl_md5_ctx, act_str.data(), act_str.size());
+      }
+      // Action Fn
+      const bm::ActionFn* act_func = it->action_fn;
+      MD5_Update(&tbl_md5_ctx, act_func->get_name().data(), act_func->get_name().size());
     }
-    MD5_Update(&tbl_md5_ctx, tbl_entries.data(), tbl_entries.size() * sizeof(MatchTable::Entry));
     unsigned char tbl_md5[16];
     MD5_Final(tbl_md5, &tbl_md5_ctx);
     tables_ra.update(table_name, tbl_md5);
