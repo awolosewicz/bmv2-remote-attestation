@@ -1,25 +1,40 @@
 # BEHAVIORAL MODEL (bmv2)
 
-[![Build Status](https://app.travis-ci.com/p4lang/behavioral-model.svg?branch=main)](https://app.travis-ci.com/p4lang/behavioral-model)
+This repository is a fork of bmv2 (behavioral model version 2) reference P4 software 
+switch, found [here](https://github.com/p4lang/behavioral-model/tree/1.15.x). This 
+includes a modified simple_switch target which possesses remote attestation 
+capabilities. All the base simple_switch and bmv2 documentation applies - it is just 
+extended with additional functionality.
 
-This is the second version of the reference P4 software switch, nicknamed bmv2
-(for behavioral model version 2). The software switch is written in C++11. It
-takes as input a JSON file generated from your P4 program by a [P4
-compiler](https://github.com/p4lang/p4c) and interprets it to implement the
-packet-processing behavior specified by that P4 program.
+Remote Attestation describes the ability to remotely verify the trustworthiness of
+something. This target possesses RA capabilities because it shares information on
+its state out of port 0 with anything that can read ethernet packets. This
+information is generated and sent out in a way the P4 program nor the control plane
+can interfere with. Thus, whatever is connected to port 0 can use the shared
+information to determine if the switch is in a trusted configuration, and share its
+findings with other devices using conventional means.
 
-This repository contains code for several variations of the behavioral
-model, e.g. `simple_switch`, `simple_switch_grpc`, `psa_switch`, etc.
-See [here](targets/README.md) for more details on the differences
-between these.
+Specifically, whenever the switch depareses a packet, a clone packet is built, written
+to be ethertype 0x8822, and then given three 16-byte hashes. These correspond to the
+switch registers, match-action tables, and program.
 
-**bmv2 is not meant to be a production-grade software switch**. It is meant to
-be used as a tool for developing, testing and debugging P4 data planes and
-control plane software written for them. As such, the performance of bmv2 - in
-terms of throughput and latency - is significantly less than that of a
-production-grade software switch like [Open
-vSwitch](https://www.openvswitch.org/). For more information about the
-performance of bmv2, refer to this [document](docs/performance.md).
+For registers, the hash is the sum of the MD5 digests of all P4 register objects. It
+is initially 0, and is updated whenever register_write, register_write_range, or
+register_reset are called.
+
+For tables, the hash is the sum of the MD5 digests of all tables' entries' functions,
+match keys, and action parameters, and is updated whenever table_add, table_delete,
+table_clear, or table_modify are called.
+
+For program, the hash is the MD5 digest of the config JSON, and is updated on
+startup and whenever swap_configs is called.
+
+All the MD5 digests leverage the existing MD5 code in base bmv2.
+
+Again, this repository functions very similarly to base bmv2, so the below documentation,
+and documentation throughout the repository, remains as copies of the base bmv2 documentation.
+The modifications are done in [simple_switch.cpp](targets/simple_switch/simple_switch.cpp) and
+[simple_switch.h](targets/simple_switch/simple_switch.h).
 
 ## Dependencies
 
