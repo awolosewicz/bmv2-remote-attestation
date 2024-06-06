@@ -36,10 +36,12 @@ and documentation throughout the repository, remains as copies of the base bmv2 
 The modifications are done in [simple_switch.cpp](targets/simple_switch/simple_switch.cpp) and
 [simple_switch.h](targets/simple_switch/simple_switch.h).
 
+The switch was rewritten June 2024 to be a cleaner fork of bmv2, and the process involved hard
+branching to ensure a clean update.
 Past variants of this switch were used in demonstrations. They can be found on their respective
 branches:
-- INDIS23: indis
 - KNIT8, HoTSoS24: upf-demo
+- INDIS23: indis
 
 ## Dependencies
 
