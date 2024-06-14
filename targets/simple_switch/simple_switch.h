@@ -62,6 +62,7 @@ using ts_res = std::chrono::microseconds;
 using std::chrono::duration_cast;
 using ticks = std::chrono::nanoseconds;
 using spade_uid_t = uint32_t;
+#define SPADE_UID_MAX 0xffffffff
 
 using bm::Switch;
 using bm::Context;
@@ -169,6 +170,8 @@ class SimpleSwitch : public Switch {
 
   int set_egress_queue_rate(size_t port, const uint64_t rate_pps);
   int set_all_egress_queue_rates(const uint64_t rate_pps);
+
+  unsigned short get_packet_etype(bm::Packet* packet);
 
   // returns the number of microseconds elapsed since the switch started
   uint64_t get_time_elapsed_us() const;

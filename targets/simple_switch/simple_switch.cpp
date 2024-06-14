@@ -247,7 +247,7 @@ SimpleSwitch::spade_send_vertex(int type, std::string vals) {
   std::ofstream spade_pipe (get_spade_file(), std::ios::out);
   if (!spade_pipe.is_open()) {
     BMLOG_DEBUG("Failed to open SPADE pipe, aborting");
-    return 0xffffffff;
+    return SPADE_UID_MAX;
   }
   switch(type) {
     case SPADE_VTYPE_AGENT:
@@ -275,7 +275,7 @@ SimpleSwitch::spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::s
   std::ofstream spade_pipe (get_spade_file(), std::ios::out);
   if (!spade_pipe.is_open()) {
     BMLOG_DEBUG("Failed to open SPADE pipe, aborting");
-    return 0xffffffff;
+    return SPADE_UID_MAX;
   }
   switch(type) {
     case SPADE_ETYPE_USED:
@@ -308,9 +308,12 @@ SimpleSwitch::spade_setup_ports() {
   std::map<bm::DevMgrIface::port_t, bm::DevMgrIface::PortInfo> portinfo = get_port_info();
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
     spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:swport num:"+std::to_string(it->first));
-    if (uid == 0xffffffff) return -1;
+    if (uid == SPADE_UID_MAX) return -1;
     spade_port_ids.insert({it->first, uid});
   }
+  spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:drop num:"+std::to_string(get_drop_port()));
+  if (uid == SPADE_UID_MAX) return -1;
+  spade_port_ids.insert({get_drop_port(), uid});
   return 0;
 }
 
@@ -563,6 +566,21 @@ SimpleSwitch::multicast(Packet *packet, unsigned int mgid) {
   }
 }
 
+unsigned short
+SimpleSwitch::get_packet_etype(bm::Packet* packet) {
+  char * packet_data = packet->data() + 12; // Get to etype
+  unsigned short etype = (short)(*packet_data << 8) | (short)(255 & *(packet_data + 1));
+  if (etype == 0x88A8) { // 802.1Q double
+    packet_data += 8;
+    etype = (short)(*packet_data << 8) | (short)(255 & *(packet_data + 1));
+  }
+  else if (etype == 0x8100) { // 802.1Q single
+    packet_data += 4;
+    etype = (short)(*packet_data << 8) | (short)(255 & *(packet_data + 1));
+  }
+  return etype;
+}
+
 void
 SimpleSwitch::ingress_thread() {
   PHV *phv;
@@ -582,7 +600,6 @@ SimpleSwitch::ingress_thread() {
     (void) ingress_port;
     BMLOG_DEBUG_PKT(*packet, "Processing packet received on port {}",
                     ingress_port);
-                    
     auto ingress_packet_size =
         packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX);
 
@@ -594,6 +611,22 @@ SimpleSwitch::ingress_thread() {
        parser leave the buffer unchanged, and move the pop logic to the
        deparser. TODO? */
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
+
+    std::stringstream spade_ss;
+    spade_ss << "subtype:packet_in size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
+             << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
+             << (int)get_packet_etype(packet.get());
+    spade_uid_t input_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
+    if (input_uid == SPADE_UID_MAX) {
+      BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress vertex")
+    }
+    else {
+      RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
+      spade_uid_t add_edge_status = spade_send_edge(SPADE_ETYPE_GENERATEDBY, input_uid,
+                                                  spade_port_ids.find(packet->get_ingress_port())->second, "");
+      if (add_edge_status != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
+    }
+
     parser->parse(packet.get());
 
     if (phv->has_field("standard_metadata.parser_error")) {
@@ -713,6 +746,8 @@ SimpleSwitch::ingress_thread() {
 
     if (egress_port == drop_port) {  // drop packet
       BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of ingress");
+      spade_send_edge(SPADE_ETYPE_USED, spade_port_ids.find(drop_port)->second,
+                      RegisterAccess::get_spade_input_uid(packet.get()), "");
       continue;
     }
     auto &f_instance_type = phv->get_field("standard_metadata.instance_type");
@@ -819,6 +854,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     port_t egress_spec = f_egress_spec.get_uint();
     if (egress_spec == drop_port) {  // drop packet
       BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of egress");
+      spade_send_edge(SPADE_ETYPE_USED, spade_port_ids.find(drop_port)->second,
+                      RegisterAccess::get_spade_input_uid(packet.get()), "");
       continue;
     }
 
@@ -892,6 +929,19 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       continue;
     }
 
+    std::stringstream spade_ss;
+    spade_ss << "subtype:packet_out size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
+             << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
+             << (int)get_packet_etype(packet.get());
+    spade_uid_t output_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
+    if (output_uid == SPADE_UID_MAX) {
+      BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
+    }
+    else {
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, output_uid, spade_prev_prog, " controller:program");
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, output_uid, RegisterAccess::get_spade_input_uid(packet.get()), "");
+      spade_send_edge(SPADE_ETYPE_USED, spade_port_ids.find(packet->get_egress_port())->second, output_uid, "");
+    }
     output_buffer.push_front(std::move(packet));
     output_buffer.push_front(std::move(packet_ra));
   }
