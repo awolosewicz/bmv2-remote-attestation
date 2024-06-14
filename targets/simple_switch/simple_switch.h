@@ -128,7 +128,8 @@ class SimpleSwitch : public Switch {
   static constexpr port_t default_drop_port = 511;
   spade_uid_t spade_uid = 0;
   spade_uid_t spade_prev_prog = 0;
-  std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_ids {};
+  std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_in_ids {};
+  std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_out_ids {};
 
  private:
   using clock = std::chrono::high_resolution_clock;
@@ -265,11 +266,11 @@ class SimpleSwitch : public Switch {
       hash_ss << (int)prog_md5[i];
     }
     if (spade_prev_prog == 0) {
-      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
+      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:program MD5:"+hash_ss.str());
     }
     // Left for future chaining control planes with edge connections post-init
     else {
-      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
+      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:program MD5:"+hash_ss.str());
     }
   }
 

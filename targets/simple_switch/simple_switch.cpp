@@ -307,13 +307,18 @@ int
 SimpleSwitch::spade_setup_ports() {
   std::map<bm::DevMgrIface::port_t, bm::DevMgrIface::PortInfo> portinfo = get_port_info();
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
-    spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:swport num:"+std::to_string(it->first));
+    spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:swport_in num:"+std::to_string(it->first));
     if (uid == SPADE_UID_MAX) return -1;
-    spade_port_ids.insert({it->first, uid});
+    spade_port_in_ids.insert({it->first, uid});
+  }
+  for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
+    spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:swport_out num:"+std::to_string(it->first));
+    if (uid == SPADE_UID_MAX) return -1;
+    spade_port_out_ids.insert({it->first, uid});
   }
   spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:drop num:"+std::to_string(get_drop_port()));
   if (uid == SPADE_UID_MAX) return -1;
-  spade_port_ids.insert({get_drop_port(), uid});
+  spade_port_out_ids.insert({get_drop_port(), uid});
   return 0;
 }
 
@@ -623,7 +628,7 @@ SimpleSwitch::ingress_thread() {
     else {
       RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
       spade_uid_t add_edge_status = spade_send_edge(SPADE_ETYPE_GENERATEDBY, input_uid,
-                                                  spade_port_ids.find(packet->get_ingress_port())->second, "");
+                                                  spade_port_in_ids.find(packet->get_ingress_port())->second, "");
       if (add_edge_status != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
     }
 
@@ -746,7 +751,7 @@ SimpleSwitch::ingress_thread() {
 
     if (egress_port == drop_port) {  // drop packet
       BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of ingress");
-      spade_send_edge(SPADE_ETYPE_USED, spade_port_ids.find(drop_port)->second,
+      spade_send_edge(SPADE_ETYPE_USED, spade_port_out_ids.find(drop_port)->second,
                       RegisterAccess::get_spade_input_uid(packet.get()), "");
       continue;
     }
@@ -854,7 +859,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     port_t egress_spec = f_egress_spec.get_uint();
     if (egress_spec == drop_port) {  // drop packet
       BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of egress");
-      spade_send_edge(SPADE_ETYPE_USED, spade_port_ids.find(drop_port)->second,
+      spade_send_edge(SPADE_ETYPE_USED, spade_port_out_ids.find(drop_port)->second,
                       RegisterAccess::get_spade_input_uid(packet.get()), "");
       continue;
     }
@@ -938,9 +943,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
     }
     else {
-      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, output_uid, spade_prev_prog, " controller:program");
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, output_uid, spade_prev_prog, "");
       spade_send_edge(SPADE_ETYPE_DERIVEDFROM, output_uid, RegisterAccess::get_spade_input_uid(packet.get()), "");
-      spade_send_edge(SPADE_ETYPE_USED, spade_port_ids.find(packet->get_egress_port())->second, output_uid, "");
+      spade_send_edge(SPADE_ETYPE_USED, spade_port_out_ids.find(packet->get_egress_port())->second, output_uid, "");
     }
     output_buffer.push_front(std::move(packet));
     output_buffer.push_front(std::move(packet_ra));
