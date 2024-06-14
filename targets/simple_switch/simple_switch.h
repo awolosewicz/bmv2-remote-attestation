@@ -48,12 +48,20 @@
 #define SSWITCH_PRIORITY_QUEUEING_SRC "intrinsic_metadata.priority"
 #endif
 
-#define SPADE_SEND(...) if (enable_spade) get_spade_pipe() << __VA_ARGS__ << std::endl;
-#define SPADE_SEND_TEST SPADE_SEND("test")
+#define SPADE_VTYPE_AGENT 1
+#define SPADE_VTYPE_PROCESS 2
+#define SPADE_VTYPE_ARTIFACT 3
+
+#define SPADE_ETYPE_USED 1
+#define SPADE_ETYPE_GENERATEDBY 2
+#define SPADE_ETYPE_TRIGGEREDBY 3
+#define SPADE_ETYPE_DERIVEDFROM 4
+#define SPADE_ETYPE_CONTROLLEDBY 5
 
 using ts_res = std::chrono::microseconds;
 using std::chrono::duration_cast;
 using ticks = std::chrono::nanoseconds;
+using spade_uid_t = uint32_t;
 
 using bm::Switch;
 using bm::Context;
@@ -117,9 +125,13 @@ class SimpleSwitch : public Switch {
   };
 
   static constexpr port_t default_drop_port = 511;
+  spade_uid_t spade_uid = 0;
+  spade_uid_t spade_prev_prog = 0;
+  std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_ids {};
 
  private:
   using clock = std::chrono::high_resolution_clock;
+  mutable boost::shared_mutex spade_mutex{};
 
   // Remote Attestation registers
   static constexpr size_t nb_ra_registers = 3;
@@ -132,7 +144,7 @@ class SimpleSwitch : public Switch {
   explicit SimpleSwitch(bool enable_swap = false,
                         port_t drop_port = default_drop_port,
                         bool enable_spade = false,
-                        std::ofstream& spade_pipe);
+                        std::string spade_file = "spade_pipe");
 
   ~SimpleSwitch();
 
@@ -175,9 +187,13 @@ class SimpleSwitch : public Switch {
     return drop_port;
   }
 
-  std::ofstream get_spade_pipe() const {
-    return spade_pipe;
+  std::string get_spade_file() const {
+    return spade_file;
   }
+
+  spade_uid_t spade_send_vertex(int type, std::string vals);
+  spade_uid_t spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::string vals);
+  int spade_setup_ports();
 
   // RA Register Access
   void set_ra_registers(unsigned char *val, unsigned int idx);
@@ -239,6 +255,19 @@ class SimpleSwitch : public Switch {
     unsigned char prog_md5[16];
     MD5_Final(prog_md5, &prog_md5_ctx);
     set_ra_registers(prog_md5, 2);
+
+    std::stringstream hash_ss;
+    hash_ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex;
+    for (int i = 0; i < 16; ++i) {
+      hash_ss << (int)prog_md5[i];
+    }
+    if (spade_prev_prog == 0) {
+      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
+    }
+    // Left for future chaining control planes with edge connections post-init
+    else {
+      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
+    }
   }
 
   // Hook Register/Table/Program modifying functions so they update the hashes post-update
@@ -376,8 +405,8 @@ class SimpleSwitch : public Switch {
 
  private:
   port_t drop_port;
-  std::ofstream spade_pipe;
   bool enable_spade;
+  std::string spade_file;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the
