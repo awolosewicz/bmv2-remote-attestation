@@ -198,9 +198,11 @@ class SimpleSwitch::InputBuffer {
   QueueImpl queue_lo;
 };
 
-SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
+SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade, std::ofstream& spade_pipe)
   : Switch(enable_swap),
     drop_port(drop_port),
+    enable_spade(enable_spade),
+    spade_pipe(spade_pipe),
     input_buffer(new InputBuffer(
         1024 /* normal capacity */, 1024 /* resubmit/recirc capacity */)),
 #ifdef SSWITCH_PRIORITY_QUEUEING_ON
@@ -505,7 +507,7 @@ SimpleSwitch::ingress_thread() {
     (void) ingress_port;
     BMLOG_DEBUG_PKT(*packet, "Processing packet received on port {}",
                     ingress_port);
-
+    SPADE_SEND_TEST;
     auto ingress_packet_size =
         packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX);
 

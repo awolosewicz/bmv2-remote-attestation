@@ -46,6 +46,12 @@ main(int argc, char* argv[]) {
   simple_switch_parser.add_uint_option(
       "drop-port",
       "Choose drop port number (default is 511)");
+  simple_switch_parser.add_flag_option(
+      "enable-spade",
+      "Enable writing to SPADE pipe");
+  simple_switch_parser.add_string_option(
+      "spade-file",
+      "The file to write provenance information to (default is /tmp/spade_pipe). Requires --enable-spade");
 
   bm::OptionsParser parser;
   parser.parse(argc, argv, &simple_switch_parser);
@@ -65,8 +71,28 @@ main(int argc, char* argv[]) {
       std::exit(1);
   }
 
-  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port);
+  bool enable_spade_flag = false;
+  if (simple_switch_parser.get_flag_option("enable-spade", &enable_spade_flag)
+      != bm::TargetParserBasic::ReturnCode::SUCCESS) {
+    std::exit(1);
+  }
+  
+  std::ofstream spade_pipe;
+  if (enable_spade_flag) {
+    std::string spade_file = "";
+    {
+      auto rc = simple_switch_parser.get_string_option("spade-file", &spade_file);
+      if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+        spade_file = "/tmp/spade_pipe";
+      else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+        std::exit(1);
+      spade_pipe.open(spade_file, ios::out | ios::ate | ios::app);
+      if (!spade_pipe.is_open())
+        std::exit(1);
+    }
+  }
 
+  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_spade_flag, spade_pipe);
   int status = simple_switch->init_from_options_parser(parser);
   if (status != 0) std::exit(status);
 

@@ -48,6 +48,9 @@
 #define SSWITCH_PRIORITY_QUEUEING_SRC "intrinsic_metadata.priority"
 #endif
 
+#define SPADE_SEND(...) if (enable_spade) get_spade_pipe() << __VA_ARGS__ << std::endl;
+#define SPADE_SEND_TEST SPADE_SEND("test")
+
 using ts_res = std::chrono::microseconds;
 using std::chrono::duration_cast;
 using ticks = std::chrono::nanoseconds;
@@ -126,8 +129,10 @@ class SimpleSwitch : public Switch {
 
  public:
   // by default, swapping is off
-  explicit SimpleSwitch(bool enable_swap = true,
-                        port_t drop_port = default_drop_port);
+  explicit SimpleSwitch(bool enable_swap = false,
+                        port_t drop_port = default_drop_port,
+                        bool enable_spade = false,
+                        std::ofstream& spade_pipe);
 
   ~SimpleSwitch();
 
@@ -168,6 +173,10 @@ class SimpleSwitch : public Switch {
 
   port_t get_drop_port() const {
     return drop_port;
+  }
+
+  std::ofstream get_spade_pipe() const {
+    return spade_pipe;
   }
 
   // RA Register Access
@@ -367,6 +376,8 @@ class SimpleSwitch : public Switch {
 
  private:
   port_t drop_port;
+  std::ofstream spade_pipe;
+  bool enable_spade;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the
