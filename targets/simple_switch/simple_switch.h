@@ -130,6 +130,7 @@ class SimpleSwitch : public Switch {
   spade_uid_t spade_prev_prog = 0;
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_in_ids {};
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_out_ids {};
+  std::unordered_map<std::string, spade_uid_t> spade_table_ids {};
 
  private:
   using clock = std::chrono::high_resolution_clock;
@@ -250,6 +251,25 @@ class SimpleSwitch : public Switch {
     MD5_Final(tbl_md5, &tbl_md5_ctx);
     tables_ra.update(table_name, tbl_md5);
     set_ra_registers(tables_ra.total_hash, 1);
+
+    std::stringstream hash_ss;
+    hash_ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex;
+    for (int i = 0; i < 16; ++i) {
+      hash_ss << (int)tbl_md5[i];
+    }
+    auto it = spade_table_ids.find(table_name);
+    if (it == spade_table_ids.end()) {
+      spade_uid_t table_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, 
+                                                "subtype:table table:"+table_name+" MD5:"+hash_ss.str());
+      spade_table_ids.insert({table_name, table_uid});
+    }
+    else {
+      spade_uid_t cur_table_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, 
+                                                    "subtype:table table:"+table_name+" MD5:"+hash_ss.str());
+      spade_uid_t prev_table_uid = it->second;
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, cur_table_uid, prev_table_uid, "operation:overwrite");
+      it->second = cur_table_uid;
+    }
   }
 
   void ra_update_proghash() {
