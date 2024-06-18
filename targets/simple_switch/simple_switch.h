@@ -140,6 +140,7 @@ class SimpleSwitch : public Switch {
   unsigned char ra_registers[16*nb_ra_registers];
   mutable boost::shared_mutex ra_reg_mutex{};
   mutable boost::shared_mutex ra_tbl_mutex{};
+  mutable boost::shared_mutex ra_prog_mutex{};
 
  public:
   // by default, swapping is off
@@ -252,6 +253,7 @@ class SimpleSwitch : public Switch {
   }
 
   void ra_update_proghash() {
+    boost::unique_lock<boost::shared_mutex> lock(ra_prog_mutex);
     MD5_CTX prog_md5_ctx;
     MD5_Init(&prog_md5_ctx);
     std::string current_config = get_config();
@@ -266,11 +268,12 @@ class SimpleSwitch : public Switch {
       hash_ss << (int)prog_md5[i];
     }
     if (spade_prev_prog == 0) {
-      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:program MD5:"+hash_ss.str());
+      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
     }
-    // Left for future chaining control planes with edge connections post-init
     else {
-      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:program MD5:"+hash_ss.str());
+      spade_uid_t spade_cur_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, spade_cur_prog, spade_prev_prog, "operation:overwrite");
+      spade_prev_prog = spade_cur_prog;
     }
   }
 
