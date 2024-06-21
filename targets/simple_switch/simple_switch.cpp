@@ -242,6 +242,9 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade
 //! Sends a vertex to SPADE with given type and vals as key:val key:val...
 spade_uid_t
 SimpleSwitch::spade_send_vertex(int type, std::string vals) {
+  if (!get_enable_spade()) {
+    return 0;
+  }
   auto instance = get_time_since_epoch_us();
   boost::unique_lock<boost::shared_mutex> lock(spade_mutex);
   std::ofstream spade_pipe (get_spade_file(), std::ios::out);
@@ -249,6 +252,7 @@ SimpleSwitch::spade_send_vertex(int type, std::string vals) {
     BMLOG_DEBUG("Failed to open SPADE pipe, aborting");
     return SPADE_UID_MAX;
   }
+  BMLOG_DEBUG("Writing vertex to spade with vals "+vals);
   switch(type) {
     case SPADE_VTYPE_AGENT:
       spade_pipe << "type:Agent id:" << spade_uid++ << " time:" 
@@ -270,6 +274,9 @@ SimpleSwitch::spade_send_vertex(int type, std::string vals) {
 //! Sends an edge to SPADE with given type and uids for from and to, also with key:val pairs
 spade_uid_t
 SimpleSwitch::spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::string vals) {
+  if (!get_enable_spade()) {
+    return 0;
+  }
   auto instance = get_time_since_epoch_us();
   boost::unique_lock<boost::shared_mutex> lock(spade_mutex);
   std::ofstream spade_pipe (get_spade_file(), std::ios::out);
@@ -277,6 +284,7 @@ SimpleSwitch::spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::s
     BMLOG_DEBUG("Failed to open SPADE pipe, aborting");
     return SPADE_UID_MAX;
   }
+  BMLOG_DEBUG("Writing edge to spade with vals "+vals);
   switch(type) {
     case SPADE_ETYPE_USED:
       spade_pipe << "type:Used time:" << instance
