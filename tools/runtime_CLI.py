@@ -26,6 +26,7 @@ import os
 import sys
 import struct
 import json
+import time
 from functools import wraps
 import bmpy_utils as utils
 
@@ -65,6 +66,40 @@ TableType = enum('TableType', 'simple', 'indirect', 'indirect_ws')
 ResType = enum('ResType', 'table', 'action_prof', 'action', 'meter_array',
                'counter_array', 'register_array', 'parse_vset')
 
+    
+# This is hard-coded for testing - a better solution is probably to
+# pull the pipe from a get() command on startup, or CLI launch option
+spade_file = "/home/Shared/spade_pipe"
+spade_CLI_uid = 1000000
+spade_r_uid = spade_CLI_uid + 1
+spade_t_uid = spade_r_uid + 1
+spade_p_uid = spade_t_uid + 1
+spade_uid = spade_p_uid + 1
+spade_last_loaded = 0
+spade_json_uids = {}
+    
+def init_spade():
+    spade_pipe = open(spade_file, 'a')
+    spade_pipe.write(f"type:Process id:{spade_CLI_uid} subtype:CLI\n")
+    spade_pipe.write(f"type:Artifact id:{spade_r_uid} subtype:CLI_reg\n")
+    spade_pipe.write(f"type:Artifact id:{spade_t_uid} subtype:CLI_tbl\n")
+    spade_pipe.write(f"type:Artifact id:{spade_p_uid} subtype:CLI_prog\n")
+    spade_pipe.close()
+
+def spade_send_vertex(type, vals):
+    global spade_uid
+    spade_pipe = open(spade_file, 'a')
+    print(f"Sending Vertex type:{type} id:{spade_uid} time:{time.time_ns()//1000} {vals}\n")
+    spade_pipe.write(f"type:{type} id:{spade_uid} time:{time.time_ns()//1000} {vals}\n")
+    spade_pipe.close()
+    spade_uid = spade_uid + 1
+    return (spade_uid - 1)
+
+def spade_send_edge(type, from_uid, to_uid, vals):
+    spade_pipe = open(spade_file, 'a')
+    print(f"Sending Edge type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
+    spade_pipe.write(f"type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
+    spade_pipe.close()
 
 def bytes_to_string(byte_array):
     form = 'B' * len(byte_array)
@@ -1133,6 +1168,10 @@ class RuntimeAPI(cmd.Cmd):
         table_name = args[0]
         table = self.get_res("table", table_name, ResType.table)
 
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_clear\\ "+cmd_in
+        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
+
         self.client.bm_mt_clear_entries(0, table.name, False)
 
     def complete_table_clear(self, text, line, start_index, end_index):
@@ -1181,10 +1220,12 @@ class RuntimeAPI(cmd.Cmd):
 
         print("Adding entry to", MatchType.to_str(
             table.match_type), "match table", table_name)
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_add\\ "+cmd_in
+        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
 
         # disable, maybe a verbose CLI option?
         self.print_table_add(match_key, action_name, runtime_data)
-
         entry_handle = self.client.bm_mt_add_entry(
             0, table.name, match_key, action.name, runtime_data,
             BmAddEntryOptions(priority=priority)
@@ -1254,6 +1295,10 @@ class RuntimeAPI(cmd.Cmd):
         print("Modifying entry", entry_handle, "for", MatchType.to_str(
             table.match_type), "match table", table_name)
 
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_modify\\ "+cmd_in
+        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
+
         entry_handle = self.client.bm_mt_modify_entry(
             0, table.name, entry_handle, action.name, runtime_data
         )
@@ -1277,6 +1322,10 @@ class RuntimeAPI(cmd.Cmd):
             raise UIn_Error("Bad format for entry handle")
 
         print("Deleting entry", entry_handle, "from", table_name)
+
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_delete\\ "+cmd_in
+        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
 
         self.client.bm_mt_delete_entry(0, table.name, entry_handle)
 
@@ -1903,6 +1952,8 @@ class RuntimeAPI(cmd.Cmd):
 
     @handle_bad_input
     def do_load_new_config_file(self, line):
+        global spade_last_loaded
+        global spade_json_uids
         "Load new json config: load_new_config_file <path to .json file>"
         args = line.split()
         self.exactly_n_args(args, 1)
@@ -1910,6 +1961,13 @@ class RuntimeAPI(cmd.Cmd):
         if not os.path.isfile(filename):
             raise UIn_Error("Not a valid filename")
         print("Loading new Json config")
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:load_new_config_file\\ "+cmd_in
+        filename_in = "path:"+filename.replace(" ", "\\ ")
+        file_uid = spade_send_vertex("Artifact", filename_in)
+        spade_json_uids[filename] = file_uid
+        spade_send_edge("Used", spade_CLI_uid, file_uid, cmd_in)
+        spade_last_loaded = file_uid
         with open(filename, 'r') as f:
             json_str = f.read()
             try:
@@ -1923,6 +1981,9 @@ class RuntimeAPI(cmd.Cmd):
     def do_swap_configs(self, line):
         "Swap the 2 existing configs, need to have called load_new_config_file before"
         print("Swapping configs")
+        if (spade_last_loaded != 0):
+            spade_send_edge("WasGeneratedBy", spade_p_uid, spade_CLI_uid, "command:swap_configs")
+            spade_send_edge("WasDerivedFrom", spade_p_uid, spade_last_loaded, "")
         self.client.bm_swap_configs()
 
     @handle_bad_input
@@ -2141,6 +2202,9 @@ class RuntimeAPI(cmd.Cmd):
             value = int(value)
         except:
             raise UIn_Error("Bad format for value, must be an integer")
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:register_write\\ "+cmd_in
+        spade_send_edge("WasGeneratedBy", spade_r_uid, spade_CLI_uid, cmd_in)
         self.client.bm_register_write(0, register.name, index, value)
 
     def complete_register_write(self, text, line, start_index, end_index):
@@ -2154,6 +2218,9 @@ class RuntimeAPI(cmd.Cmd):
         register_name = args[0]
         register = self.get_res("register", register_name,
                                 ResType.register_array)
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:register_reset\\ "+cmd_in
+        spade_send_edge("WasGeneratedBy", spade_r_uid, spade_CLI_uid, cmd_in)
         self.client.bm_register_reset(0, register.name)
 
     def complete_register_reset(self, text, line, start_index, end_index):
@@ -2617,7 +2684,6 @@ def main():
     )
 
     load_json_config(standard_client, args.json)
-
     RuntimeAPI(args.pre, standard_client, mc_client).cmdloop()
 
 

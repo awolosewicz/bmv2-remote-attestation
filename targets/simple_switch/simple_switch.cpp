@@ -277,7 +277,7 @@ SimpleSwitch::spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::s
   if (!get_enable_spade()) {
     return 0;
   }
-  auto instance = get_time_since_epoch_us();
+  auto instance = get_time_since_epoch_us()/1000;
   boost::unique_lock<boost::shared_mutex> lock(spade_mutex);
   std::ofstream spade_pipe (get_spade_file(), std::ios::out);
   if (!spade_pipe.is_open()) {

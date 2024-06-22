@@ -120,6 +120,23 @@ class SimpleSwitchAPI(runtime_CLI.RuntimeAPI):
     def do_get_time_since_epoch(self, line):
         "Get time elapsed (in microseconds) since the switch clock's epoch: get_time_since_epoch"
         print(self.sswitch_client.get_time_since_epoch_us())
+    
+    # This is hard-coded for testing - a better solution is probably to
+    # pull the pipe from a get() command on startup
+    spade_file = "/home/ubuntu/spade_pipe"
+    spade_CLI_uid = 1000000
+    spade_r_uid = 1000001
+    spade_t_uid = 1000002
+    spade_p_uid = 1000003
+    spade_uid = 1000004
+    
+    def init_spade(self):
+        print("Writing to pipe")
+        spade_pipe = open(self.spade_file, "a")
+        spade_pipe.write(f"type:Process id:{self.spade_CLI_uid} subtype:CLI")
+        spade_pipe.write(f"type:Artifact id:{self.spade_r_uid} subtype:CLI_reg")
+        spade_pipe.write(f"type:Artifact id:{self.spade_t_uid} subtype:CLI_tbl")
+        spade_pipe.write(f"type:Artifact id:{self.spade_p_uid} subtype:CLI_prog")
 
 def main():
     args = runtime_CLI.get_parser().parse_args()
@@ -134,6 +151,7 @@ def main():
     )
 
     runtime_CLI.load_json_config(standard_client, args.json)
+    runtime_CLI.init_spade()
 
     SimpleSwitchAPI(args.pre, standard_client, mc_client, sswitch_client).cmdloop()
 
