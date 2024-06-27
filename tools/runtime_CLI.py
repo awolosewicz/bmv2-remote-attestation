@@ -29,6 +29,7 @@ import json
 import time
 from functools import wraps
 import bmpy_utils as utils
+import hashlib
 
 
 from bm_runtime.standard import Standard
@@ -74,26 +75,17 @@ spade_CLI_uid = 1000000
 spade_r_uid = spade_CLI_uid + 1
 spade_t_uid = spade_r_uid + 1
 spade_p_uid = spade_t_uid + 1
-spade_uid = spade_p_uid + 1
-spade_last_loaded = 0
-spade_json_uids = {}
-    
+spade_b_uid = spade_p_uid + 1
+
+# SPADE functions used later
 def init_spade():
     spade_pipe = open(spade_file, 'a')
     spade_pipe.write(f"type:Process id:{spade_CLI_uid} subtype:CLI\n")
     spade_pipe.write(f"type:Artifact id:{spade_r_uid} subtype:CLI_reg\n")
     spade_pipe.write(f"type:Artifact id:{spade_t_uid} subtype:CLI_tbl\n")
     spade_pipe.write(f"type:Artifact id:{spade_p_uid} subtype:CLI_prog\n")
+    spade_pipe.write(f"type:Artifact id:{spade_b_uid} subtype:CLI_loaded_prog\n")
     spade_pipe.close()
-
-def spade_send_vertex(type, vals):
-    global spade_uid
-    spade_pipe = open(spade_file, 'a')
-    print(f"Sending Vertex type:{type} id:{spade_uid} time:{time.time_ns()//1000} {vals}\n")
-    spade_pipe.write(f"type:{type} id:{spade_uid} time:{time.time_ns()//1000} {vals}\n")
-    spade_pipe.close()
-    spade_uid = spade_uid + 1
-    return (spade_uid - 1)
 
 def spade_send_edge(type, from_uid, to_uid, vals):
     spade_pipe = open(spade_file, 'a')
@@ -1158,6 +1150,7 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_num_entries(self, text, line, start_index, end_index):
         return self._complete_tables(text)
 
+    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_clear(self, line):
         "Clear all entries in a match table (direct or indirect), but not the default entry: table_clear <table name>"
@@ -1177,6 +1170,7 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_clear(self, text, line, start_index, end_index):
         return self._complete_tables(text)
 
+    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_add(self, line):
         "Add entry to a match table: table_add <table name> <action name> <match fields> => <action parameters> [priority]"
@@ -1266,6 +1260,7 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_set_timeout(self, text, line, start_index, end_index):
         return self._complete_tables(text)
 
+    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_modify(self, line):
         "Add entry to a match table: table_modify <table name> <action name> <entry handle> [action parameters]"
@@ -1306,6 +1301,7 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_modify(self, text, line, start_index, end_index):
         return self._complete_table_and_action(text, line)
 
+    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_delete(self, line):
         "Delete entry from a match table: table_delete <table name> <entry handle>"
@@ -1950,10 +1946,9 @@ class RuntimeAPI(cmd.Cmd):
             print("None for this PRE type")
         print("==========")
 
+    # Modified to add SPADE edge indicating program loaded to switch buffer, with MD5 of the JSON
     @handle_bad_input
     def do_load_new_config_file(self, line):
-        global spade_last_loaded
-        global spade_json_uids
         "Load new json config: load_new_config_file <path to .json file>"
         args = line.split()
         self.exactly_n_args(args, 1)
@@ -1963,11 +1958,18 @@ class RuntimeAPI(cmd.Cmd):
         print("Loading new Json config")
         cmd_in = line.replace(" ", "\\ ")
         cmd_in = "command:load_new_config_file\\ "+cmd_in
-        filename_in = "path:"+filename.replace(" ", "\\ ")
-        file_uid = spade_send_vertex("Artifact", filename_in)
-        spade_json_uids[filename] = file_uid
-        spade_send_edge("Used", spade_CLI_uid, file_uid, cmd_in)
-        spade_last_loaded = file_uid
+        # Using second read loop to reset pointer
+        with open(filename, 'r') as f:
+            # Reusing from bmpy_utils:check_JSON_md5
+            # Changed formating to :0X (to match BMv2 side), ord(c) to c due to error
+            m = hashlib.md5()
+            for L in f:
+                m.update(L.encode())
+            md5sum = m.digest()
+            md5sum_str = "".join("{:0X}".format(c) for c in md5sum)
+            cmd_in  = cmd_in + " MD5:0x" + md5sum_str
+            spade_send_edge("Used", spade_CLI_uid, spade_b_uid, cmd_in)
+            f.close()
         with open(filename, 'r') as f:
             json_str = f.read()
             try:
@@ -1977,13 +1979,13 @@ class RuntimeAPI(cmd.Cmd):
             self.client.bm_load_new_config(json_str)
             load_json_str(json_str)
 
+    # Modified to add SPADE edges indicating the program was swapped
     @handle_bad_input
     def do_swap_configs(self, line):
         "Swap the 2 existing configs, need to have called load_new_config_file before"
         print("Swapping configs")
-        if (spade_last_loaded != 0):
-            spade_send_edge("WasGeneratedBy", spade_p_uid, spade_CLI_uid, "command:swap_configs")
-            spade_send_edge("WasDerivedFrom", spade_p_uid, spade_last_loaded, "")
+        spade_send_edge("WasGeneratedBy", spade_p_uid, spade_CLI_uid, "command:swap_configs")
+        spade_send_edge("WasDerivedFrom", spade_p_uid, spade_b_uid, "")
         self.client.bm_swap_configs()
 
     @handle_bad_input
@@ -2184,6 +2186,7 @@ class RuntimeAPI(cmd.Cmd):
     def complete_register_read(self, text, line, start_index, end_index):
         return self._complete_registers(text)
 
+    # Modified to write a SPADE edge
     @handle_bad_input
     def do_register_write(self, line):
         "Write register value: register_write <name> <index> <value>"
@@ -2210,6 +2213,7 @@ class RuntimeAPI(cmd.Cmd):
     def complete_register_write(self, text, line, start_index, end_index):
         return self._complete_registers(text)
 
+    # Modified to write a SPADE edge
     @handle_bad_input
     def do_register_reset(self, line):
         "Reset all the cells in the register array to 0: register_reset <name>"
