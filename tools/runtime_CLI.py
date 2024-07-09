@@ -70,6 +70,7 @@ ResType = enum('ResType', 'table', 'action_prof', 'action', 'meter_array',
     
 # This is hard-coded for testing - a better solution is probably to
 # pull the pipe from a get() command on startup, or CLI launch option
+spade_enabled = False
 spade_file = "/home/Shared/spade_pipe"
 spade_CLI_uid = 1000000
 spade_r_uid = spade_CLI_uid + 1
@@ -79,6 +80,8 @@ spade_b_uid = spade_p_uid + 1
 
 # SPADE functions used later
 def init_spade():
+    if not spade_enabled:
+        return
     spade_pipe = open(spade_file, 'a')
     spade_pipe.write(f"type:Process id:{spade_CLI_uid} subtype:CLI\n")
     spade_pipe.write(f"type:Artifact id:{spade_r_uid} subtype:CLI_reg\n")
@@ -88,6 +91,8 @@ def init_spade():
     spade_pipe.close()
 
 def spade_send_edge(type, from_uid, to_uid, vals):
+    if not spade_enabled:
+        return
     spade_pipe = open(spade_file, 'a')
     print(f"Sending Edge type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
     spade_pipe.write(f"type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
@@ -1970,7 +1975,7 @@ class RuntimeAPI(cmd.Cmd):
             cmd_in  = cmd_in + " MD5:0x" + md5sum_str
             spade_send_edge("Used", spade_CLI_uid, spade_b_uid, cmd_in)
             f.close()
-        with open(filename, 'r') as f:
+        with open("/home/ubuntu/clone.json", 'r') as f:
             json_str = f.read()
             try:
                 json.loads(json_str)

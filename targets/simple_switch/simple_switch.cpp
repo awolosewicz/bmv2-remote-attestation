@@ -693,6 +693,7 @@ SimpleSwitch::ingress_thread() {
         RegisterAccess::clear_all(packet_copy.get());
         packet_copy->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX,
                                   ingress_packet_size);
+        RegisterAccess::set_spade_input_uid(packet_copy.get(), RegisterAccess::get_spade_input_uid(packet.get()));
         // we need to parse again
         // the alternative would be to pay the (huge) price of PHV copy for
         // every ingress packet
