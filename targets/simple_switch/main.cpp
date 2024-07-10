@@ -46,6 +46,12 @@ main(int argc, char* argv[]) {
   simple_switch_parser.add_uint_option(
       "drop-port",
       "Choose drop port number (default is 511)");
+  simple_switch_parser.add_flag_option(
+      "enable-ra",
+      "Enable Remote Attestation functionality");
+  simple_switch_parser.add_uint_option(
+      "ra-port",
+      "Choose port RA traffic exits on (default is 0)");
 
   bm::OptionsParser parser;
   parser.parse(argc, argv, &simple_switch_parser);
@@ -65,7 +71,22 @@ main(int argc, char* argv[]) {
       std::exit(1);
   }
 
-  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port);
+  bool enable_ra_flag = false;
+  if (simple_switch_parser.get_flag_option("enable-ra", &enable_ra_flag)
+      != bm::TargetParserBasic::ReturnCode::SUCCESS) {
+    std::exit(1);
+  }
+
+  uint32_t ra_port = 0xffffffff;
+  {
+    auto rc = simple_switch_parser.get_uint_option("ra-port", &ra_port);
+    if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+      ra_port = SimpleSwitch::default_ra_port;
+    else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+      std::exit(1);
+  }
+
+  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_ra_flag, ra_port);
 
   int status = simple_switch->init_from_options_parser(parser);
   if (status != 0) std::exit(status);

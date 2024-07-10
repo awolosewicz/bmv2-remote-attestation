@@ -198,9 +198,11 @@ class SimpleSwitch::InputBuffer {
   QueueImpl queue_lo;
 };
 
-SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port)
+SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_ra, port_t ra_port)
   : Switch(enable_swap),
     drop_port(drop_port),
+    enable_ra(enable_ra),
+    ra_port(ra_port),
     input_buffer(new InputBuffer(
         1024 /* normal capacity */, 1024 /* resubmit/recirc capacity */)),
 #ifdef SSWITCH_PRIORITY_QUEUEING_ON
@@ -748,44 +750,47 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     deparser->deparse(packet.get());
 
     // Post-Deparse add RA data to an ethernet broadcast egressing on port 0
-    std::unique_ptr<Packet> packet_ra = packet->clone_with_phv_ptr();
-    packet_ra->set_egress_port(0);
-    char *packetDataEgress = packet_ra->data();
-    char *packetDataEgressStart = packetDataEgress;
-    // Set destination MAC to ff:ff:ff:ff:ff:ff
-    for (int i = 0; i < 6; i++) {
-      *packetDataEgress = 255;
-      packetDataEgress += 1;
-    }
-    packetDataEgress += 6; // src = 48 bits = 6 bytes
-    unsigned short etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
+    std::unique_ptr<Packet> packet_ra;
+    if (enable_ra) {
+      packet_ra = packet->clone_with_phv_ptr();
+      packet_ra->set_egress_port(0);
+      char *packetDataEgress = packet_ra->data();
+      char *packetDataEgressStart = packetDataEgress;
+      // Set destination MAC to ff:ff:ff:ff:ff:ff
+      for (int i = 0; i < 6; i++) {
+        *packetDataEgress = 255;
+        packetDataEgress += 1;
+      }
+      packetDataEgress += 6; // src = 48 bits = 6 bytes
+      unsigned short etype = (short)(*packetDataEgress << 8) | (short)(255 & *(packetDataEgress + 1));
 
-    BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
-    size_t sizeIPData = 12;
-    if (etype == 34984) { // 802.1Q double, 0x88A8
-      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q double");
-      sizeIPData += 8;
-      packetDataEgress += 8;
+      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Beginning post-deparse possibly adding new RA extension");
+      size_t sizeIPData = 12;
+      if (etype == 34984) { // 802.1Q double, 0x88A8
+        BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q double");
+        sizeIPData += 8;
+        packetDataEgress += 8;
+      }
+      else if (etype == 33024) { // 802.1Q single, 0x8100
+        BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q single");
+        sizeIPData += 4;
+        packetDataEgress += 4;
+      }
+      // Write attestation etype (testing, 34850, 0x8822)
+      *(packetDataEgress++) = 136;
+      *(packetDataEgress++) = 34;
+      sizeIPData += 2;
+      char *packetDataNew = packet_ra->prepend(96);
+      memmove(packetDataNew, packetDataEgressStart, sizeIPData);
+      packetDataEgress = packetDataNew + sizeIPData;
+      for (int q = 0; q < (int)(nb_ra_registers); q++) {
+        memcpy(packetDataEgress, get_ra_register(q), 16);
+        packetDataEgress += 16;
+        sizeIPData += 16;
+      }
+      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Truncating to {} bytes", sizeIPData);
+      packet_ra->truncate(sizeIPData);
     }
-    else if (etype == 33024) { // 802.1Q single, 0x8100
-      BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Found ethertype 802.1Q single");
-      sizeIPData += 4;
-      packetDataEgress += 4;
-    }
-    // Write attestation etype (testing, 34850, 0x8822)
-    *(packetDataEgress++) = 136;
-    *(packetDataEgress++) = 34;
-    sizeIPData += 2;
-    char *packetDataNew = packet_ra->prepend(96);
-    memmove(packetDataNew, packetDataEgressStart, sizeIPData);
-    packetDataEgress = packetDataNew + sizeIPData;
-    for (int q = 0; q < (int)(nb_ra_registers); q++) {
-      memcpy(packetDataEgress, get_ra_register(q), 16);
-      packetDataEgress += 16;
-      sizeIPData += 16;
-    }
-    BMLOG_DEBUG_PKT(*packet_ra, "[RA Post-Deparse] Truncating to {} bytes", sizeIPData);
-    packet_ra->truncate(sizeIPData);
 
     // RECIRCULATE
     auto recirculate_flag = RegisterAccess::get_recirculate_flag(packet.get());
@@ -816,6 +821,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
 
     output_buffer.push_front(std::move(packet));
-    output_buffer.push_front(std::move(packet_ra));
+    if (enable_ra) output_buffer.push_front(std::move(packet_ra));
   }
 }

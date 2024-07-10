@@ -114,6 +114,7 @@ class SimpleSwitch : public Switch {
   };
 
   static constexpr port_t default_drop_port = 511;
+  static constexpr port_t default_ra_port = 0;
 
  private:
   using clock = std::chrono::high_resolution_clock;
@@ -126,8 +127,10 @@ class SimpleSwitch : public Switch {
 
  public:
   // by default, swapping is off
-  explicit SimpleSwitch(bool enable_swap = true,
-                        port_t drop_port = default_drop_port);
+  explicit SimpleSwitch(bool enable_swap = false,
+                        port_t drop_port = default_drop_port,
+                        bool enable_ra = false,
+                        port_t ra_port = default_ra_port);
 
   ~SimpleSwitch();
 
@@ -179,6 +182,7 @@ class SimpleSwitch : public Switch {
   // Get MD5 of register through hashing all the register elements
   // Uses binary representation of Data to avoid unknown of using Data directly
   void ra_update_reghash(cxt_id_t cxt_id, const std::string &register_name) {
+    if (!enable_ra) return;
     boost::unique_lock<boost::shared_mutex> lock(ra_reg_mutex);
     MD5_CTX reg_md5_ctx;
     MD5_Init(&reg_md5_ctx);
@@ -195,6 +199,7 @@ class SimpleSwitch : public Switch {
   // Get MD5 of tables through hashing all the entries
   // AN entry, in this case, is the match key(s), associated function, and function data
   void ra_update_tblhash(cxt_id_t cxt_id, const std::string &table_name) {
+    if (!enable_ra) return;
     boost::unique_lock<boost::shared_mutex> lock(ra_tbl_mutex);
     MD5_CTX tbl_md5_ctx;
     MD5_Init(&tbl_md5_ctx);
@@ -223,6 +228,7 @@ class SimpleSwitch : public Switch {
   }
 
   void ra_update_proghash() {
+    if (!enable_ra) return;
     MD5_CTX prog_md5_ctx;
     MD5_Init(&prog_md5_ctx);
     std::string current_config = get_config();
@@ -367,6 +373,8 @@ class SimpleSwitch : public Switch {
 
  private:
   port_t drop_port;
+  bool enable_ra;
+  port_t ra_port;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the
