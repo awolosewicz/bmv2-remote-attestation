@@ -115,7 +115,7 @@ class SimpleSwitch : public Switch {
 
   static constexpr port_t default_drop_port = 511;
   static constexpr port_t default_ra_port = 0;
-  static constexpr uint32_t default_ra_etype = 0x8822;
+  static constexpr uint32_t default_ra_etype = 0x5241;
 
  private:
   using clock = std::chrono::high_resolution_clock;

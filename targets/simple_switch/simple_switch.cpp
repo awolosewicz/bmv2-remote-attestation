@@ -777,9 +777,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         sizeIPData += 4;
         packetDataEgress += 4;
       }
-      // Write attestation etype (default is testing, 34850, 0x8822)
-      *(packetDataEgress++) = static_cast<unsigned char>((ra_etype >> 8) & 0xff); //136
-      *(packetDataEgress++) = static_cast<unsigned char>(ra_etype & 0xff); //34
+      // Write attestation etype
+      *(packetDataEgress++) = static_cast<unsigned char>((ra_etype >> 8) & 0xff);
+      *(packetDataEgress++) = static_cast<unsigned char>(ra_etype & 0xff);
       sizeIPData += 2;
       char *packetDataNew = packet_ra->prepend(96);
       memmove(packetDataNew, packetDataEgressStart, sizeIPData);
