@@ -52,6 +52,9 @@ main(int argc, char* argv[]) {
   simple_switch_parser.add_uint_option(
       "ra-port",
       "Choose port RA traffic exits on (default is 0)");
+  simple_switch_parser.add_uint_option(
+      "ra-etype",
+      "Choose the ethertype for RA packets, as an integer (default is 34850 or 0x8822)");
 
   bm::OptionsParser parser;
   parser.parse(argc, argv, &simple_switch_parser);
@@ -86,7 +89,16 @@ main(int argc, char* argv[]) {
       std::exit(1);
   }
 
-  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_ra_flag, ra_port);
+  uint32_t ra_etype = 0xffffffff;
+  {
+    auto rc = simple_switch_parser.get_uint_option("ra-etype", &ra_etype);
+    if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+      ra_etype = SimpleSwitch::default_ra_etype;
+    else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+      std::exit(1);
+  }
+
+  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_ra_flag, ra_port, ra_etype);
 
   int status = simple_switch->init_from_options_parser(parser);
   if (status != 0) std::exit(status);

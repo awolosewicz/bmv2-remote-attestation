@@ -198,11 +198,12 @@ class SimpleSwitch::InputBuffer {
   QueueImpl queue_lo;
 };
 
-SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_ra, port_t ra_port)
+SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_ra, port_t ra_port, uint32_t ra_etype)
   : Switch(enable_swap),
     drop_port(drop_port),
     enable_ra(enable_ra),
     ra_port(ra_port),
+    ra_etype((uint16_t)ra_etype),
     input_buffer(new InputBuffer(
         1024 /* normal capacity */, 1024 /* resubmit/recirc capacity */)),
 #ifdef SSWITCH_PRIORITY_QUEUEING_ON
@@ -753,7 +754,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     std::unique_ptr<Packet> packet_ra;
     if (enable_ra) {
       packet_ra = packet->clone_with_phv_ptr();
-      packet_ra->set_egress_port(0);
+      packet_ra->set_egress_port(ra_port);
       char *packetDataEgress = packet_ra->data();
       char *packetDataEgressStart = packetDataEgress;
       // Set destination MAC to ff:ff:ff:ff:ff:ff
@@ -776,9 +777,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         sizeIPData += 4;
         packetDataEgress += 4;
       }
-      // Write attestation etype (testing, 34850, 0x8822)
-      *(packetDataEgress++) = 136;
-      *(packetDataEgress++) = 34;
+      // Write attestation etype (default is testing, 34850, 0x8822)
+      *(packetDataEgress++) = static_cast<unsigned char>((ra_etype >> 8) & 0xff); //136
+      *(packetDataEgress++) = static_cast<unsigned char>(ra_etype & 0xff); //34
       sizeIPData += 2;
       char *packetDataNew = packet_ra->prepend(96);
       memmove(packetDataNew, packetDataEgressStart, sizeIPData);

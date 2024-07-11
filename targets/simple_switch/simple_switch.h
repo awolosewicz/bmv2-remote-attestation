@@ -115,6 +115,7 @@ class SimpleSwitch : public Switch {
 
   static constexpr port_t default_drop_port = 511;
   static constexpr port_t default_ra_port = 0;
+  static constexpr uint32_t default_ra_etype = 0x8822;
 
  private:
   using clock = std::chrono::high_resolution_clock;
@@ -130,7 +131,8 @@ class SimpleSwitch : public Switch {
   explicit SimpleSwitch(bool enable_swap = false,
                         port_t drop_port = default_drop_port,
                         bool enable_ra = false,
-                        port_t ra_port = default_ra_port);
+                        port_t ra_port = default_ra_port,
+                        uint32_t ra_etype = default_ra_etype);
 
   ~SimpleSwitch();
 
@@ -375,6 +377,7 @@ class SimpleSwitch : public Switch {
   port_t drop_port;
   bool enable_ra;
   port_t ra_port;
+  uint32_t ra_etype;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the

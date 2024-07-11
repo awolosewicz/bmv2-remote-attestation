@@ -8,9 +8,9 @@ extended with additional functionality.
 
 Remote Attestation describes the ability to remotely verify the trustworthiness of
 something. This target possesses RA capabilities because it shares information on
-its state out of port 0 with anything that can read ethernet packets. This
+its state out of a specified RA port (default 0) with anything that can read ethernet packets. This
 information is generated and sent out in a way the P4 program nor the control plane
-can interfere with. Thus, whatever is connected to port 0 can use the shared
+can interfere with. Thus, whatever is connected to this port can use the shared
 information to determine if the switch is in a trusted configuration, and share its
 findings with other devices using conventional means.
 
@@ -42,6 +42,28 @@ Past variants of this switch were used in demonstrations. They can be found on t
 branches:
 - KNIT8, HoTSoS24: upf-demo
 - INDIS23: indis
+
+## Running the Switch
+
+As stated above, simple_switch is the modified switch. To run enable the described RA functionality,
+you must pass the argument `--enable-ra`. This is a target-specific launch option, so must first be preceded
+by another set of double dashes `-- ` to separate it from normal, BMv2-wide launch options. 
+
+For an example:
+
+```sudo ~/bmv2-remote-attestation/targets/simple_switch/simple_switch -i 0@enp7s0 -i 1@enp9s0 ~/router.json --log-console -- --enable-swap --enable-ra```
+
+starts an instance of the switchwith 2 ports (monitoring interfaces enp7s0 and enp9s0),
+with debug logging to console due to the base BMv2 `--log-console` option, with program
+hot-swapping started through the use of the base simple_switch target-specific `--enable-swap` option, and with RA enabled.
+
+Other target-specific options that have been added to this switch:
+- `--ra-port`: sets the port that RA data is transmitted on (default 0)
+- `--ra-etype`: sets the ethertype that the RA packets use, (default 34850). Must be an integer (default in hex is 0x8822)
+
+If you want to confirm that you are using the modified variant, passing the base BMv2 argument `-v` should print a version
+with the appended -ra tag between the base BMv2 version this was forked from (1.15.0) and the commit of this repository it
+was built from.
 
 ## Dependencies
 
