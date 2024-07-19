@@ -127,8 +127,8 @@ class SimpleSwitch : public Switch {
   };
 
   static constexpr port_t default_drop_port = 511;
+  static constexpr uint32_t default_spade_id = 0;
   std::string loaded_config;
-  spade_uid_t spade_uid = 0;
   spade_uid_t spade_prev_prog = 0;
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_in_ids {};
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_out_ids {};
@@ -151,7 +151,8 @@ class SimpleSwitch : public Switch {
   explicit SimpleSwitch(bool enable_swap = false,
                         port_t drop_port = default_drop_port,
                         bool enable_spade = false,
-                        std::string spade_file = "spade_pipe");
+                        std::string spade_file = "spade_pipe",
+                        uint32_t spade_switch_id = default_spade_id);
 
   ~SimpleSwitch();
 
@@ -204,7 +205,7 @@ class SimpleSwitch : public Switch {
     return enable_spade;
   }
 
-  spade_uid_t spade_send_vertex(int type, std::string vals);
+  spade_uid_t spade_send_vertex(int type, spade_uit_t spade_uid, std::string vals);
   spade_uid_t spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::string vals);
   int spade_setup_ports();
 
@@ -478,6 +479,7 @@ class SimpleSwitch : public Switch {
   class MirroringSessions;
 
   class InputBuffer;
+  class SpadeBuffer;
 
   enum PktInstanceType {
     PKT_INSTANCE_TYPE_NORMAL,
@@ -501,6 +503,7 @@ class SimpleSwitch : public Switch {
   };
 
  private:
+  void spade_thread();
   void ingress_thread();
   void egress_thread(size_t worker_id);
   void transmit_thread();
@@ -523,6 +526,9 @@ class SimpleSwitch : public Switch {
   port_t drop_port;
   bool enable_spade;
   std::string spade_file;
+  uint32_t spade_switch_id;
+  // std::unique_ptr<SpadeBuffer> spade_buffer;
+  Queue<std::string> spade_buffer;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the

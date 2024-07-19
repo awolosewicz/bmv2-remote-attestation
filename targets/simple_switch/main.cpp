@@ -52,6 +52,11 @@ main(int argc, char* argv[]) {
   simple_switch_parser.add_string_option(
       "spade-file",
       "The file to write provenance information to (default is spade_pipe). Requires --enable-spade");
+  simple_switch_parser.add_uint_option(
+      "spade-switch-id",
+      "Choose id for this switch, 0-20 (default 0). All vertices from this switch will have IDs of [switch][packet][clone].\n
+       Switch is 0-20 inclusive, packet is 1-(10M-1) (packet 0 is reserved), clone is 1-9 (parent is 0).\n
+       EX: Clone 2 of packet 192 of switch 4 is 0400001922.");
 
   bm::OptionsParser parser;
   parser.parse(argc, argv, &simple_switch_parser);
@@ -87,8 +92,17 @@ main(int argc, char* argv[]) {
         std::exit(1);
     }
   }
+  
+  uint32_t spade_switch_id = 0xffffffff;
+  {
+    auto rc = simple_switch_parser.get_uint_option("spade-switch-id", &spade_switch_id) * 100000000; // * 100M
+    if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+      spade_switch_id = SimpleSwitch::default_spade_id;
+    else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+      std::exit(1);
+  }
 
-  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_spade_flag, spade_file);
+  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_spade_flag, spade_file, spade_switch_id);
   int status = simple_switch->init_from_options_parser(parser);
   if (status != 0) std::exit(status);
   if (enable_spade_flag){

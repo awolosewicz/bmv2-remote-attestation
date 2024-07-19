@@ -198,11 +198,40 @@ class SimpleSwitch::InputBuffer {
   QueueImpl queue_lo;
 };
 
-SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade, std::string spade_file)
+// class SimpleSwitch::SpadeBuffer {
+//  public:
+//   using Mutex = std::mutex;
+//   using Lock = std::unique_lock<Mutex>;
+
+//   int push_front(std::string input) {
+//     Lock lock(mutex);
+//     queue.push_front(input);
+//     lock.unlock()
+//     cvar_can_pop.notify_one();
+//     return 0;
+//   }
+
+//   void pop_back(std::string *output) {
+//     Lock lock(mutex);
+//     cvar_can_pop.wait(
+//         lock, [this] { return queue.size() > 0; });
+//     *output = std::move(queue.back());
+//     queue.pop_back();
+//     lock.unlock();
+//   }
+
+//  private:
+//   mutable Mutex mutex;
+//   mutable std::condition_variable cvar_can_pop;
+//   std::deque<std::string> queue;
+// }
+
+SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade, std::string spade_file, uint32_t spade_switch_id)
   : Switch(enable_swap),
     drop_port(drop_port),
     enable_spade(enable_spade),
     spade_file(spade_file),
+    spade_switch_id(spade_switch_id),
     input_buffer(new InputBuffer(
         1024 /* normal capacity */, 1024 /* resubmit/recirc capacity */)),
 #ifdef SSWITCH_PRIORITY_QUEUEING_ON
@@ -214,6 +243,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade
                    64, EgressThreadMapper(nb_egress_threads)),
 #endif
     output_buffer(128),
+    spade_buffer(1024),
     // cannot use std::bind because of a clang bug
     // https://stackoverflow.com/questions/32030141/is-this-incorrect-use-of-stdbind-or-a-compiler-bug
     my_transmit_fn([this](port_t port_num, packet_id_t pkt_id,
@@ -239,94 +269,104 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade
   import_primitives(this);
 }
 
-//! Sends a vertex to SPADE with given type and vals as key:val key:val...
-spade_uid_t
-SimpleSwitch::spade_send_vertex(int type, std::string vals) {
-  if (!get_enable_spade()) {
-    return 0;
-  }
-  auto instance = get_time_since_epoch_us();
-  boost::unique_lock<boost::shared_mutex> lock(spade_mutex);
+void
+SimpleSwitch::spade_thread() {
   std::ofstream spade_pipe (get_spade_file(), std::ios::out);
   if (!spade_pipe.is_open()) {
-    BMLOG_DEBUG("Failed to open SPADE pipe, aborting");
-    return SPADE_UID_MAX;
+    BMLOG_DEBUG("Failed to open SPADE pipe");
   }
+  else {
+    while (1) {
+      std::string output;
+      spade_buffer.pop_back(&output);
+      if (output = "") break;
+      spade_pipe << output;
+    }
+    spade_pipe.close();
+  }
+}
+
+//! Sends a vertex to SPADE with given type and vals as key:val key:val...
+int
+SimpleSwitch::spade_send_vertex(int type, spade_uid_t spade_uid, std::string vals) {
+  if (!get_enable_spade()) {
+    return -1;
+  }
+  auto instance = get_time_since_epoch_us();
+  std::stringstream spade_ss;
   BMLOG_DEBUG("Writing vertex to spade with vals "+vals);
   switch(type) {
     case SPADE_VTYPE_AGENT:
-      spade_pipe << "type:Agent id:" << spade_uid++ << " time:" 
+      spade_ss << "type:Agent id:" << spade_uid << " time:" 
                  << instance << " " << vals << std::endl;
       break;
     case SPADE_VTYPE_PROCESS:
-      spade_pipe << "type:Process id:" << spade_uid++ << " time:" 
+      spade_ss << "type:Process id:" << spade_uid << " time:" 
                  << instance << " " << vals << std::endl;
       break;
     case SPADE_VTYPE_ARTIFACT:
-      spade_pipe << "type:Artifact id:" << spade_uid++ << " time:" 
+      spade_ss << "type:Artifact id:" << spade_uid << " time:" 
                  << instance << " " << vals << std::endl;
       break;
   }
-  spade_pipe.close();
-  return spade_uid - 1;
+  const std::string to_write = spade_ss.str();
+  spade_buffer.push_front(std::move(to_write));
+  return 0;
 }
 
 //! Sends an edge to SPADE with given type and uids for from and to, also with key:val pairs
-spade_uid_t
+int
 SimpleSwitch::spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::string vals) {
   if (!get_enable_spade()) {
-    return 0;
+    return -1;
   }
   auto instance = get_time_since_epoch_us()/1000;
-  boost::unique_lock<boost::shared_mutex> lock(spade_mutex);
-  std::ofstream spade_pipe (get_spade_file(), std::ios::out);
-  if (!spade_pipe.is_open()) {
-    BMLOG_DEBUG("Failed to open SPADE pipe, aborting");
-    return SPADE_UID_MAX;
-  }
   BMLOG_DEBUG("Writing edge to spade with vals "+vals);
+  std::stringstream spade_ss;
   switch(type) {
     case SPADE_ETYPE_USED:
-      spade_pipe << "type:Used time:" << instance
+      spade_ss << "type:Used time:" << instance
                  << " from:" << from << " to:" << to << " " << vals << std::endl;
       break;
     case SPADE_ETYPE_GENERATEDBY:
-      spade_pipe << "type:WasGeneratedBy time:" << instance
+      spade_ss << "type:WasGeneratedBy time:" << instance
                  << " from:" << from << " to:" << to << " " << vals << std::endl;
       break;
     case SPADE_ETYPE_TRIGGEREDBY:
-      spade_pipe << "type:WasTriggeredBy time:" << instance
+      spade_ss << "type:WasTriggeredBy time:" << instance
                  << " from:" << from << " to:" << to << " " << vals << std::endl;
       break;
     case SPADE_ETYPE_DERIVEDFROM:
-      spade_pipe << "type:WasDerivedFrom time:" << instance
+      spade_ss << "type:WasDerivedFrom time:" << instance
                  << " from:" << from << " to:" << to << " " << vals << std::endl;
       break;
     case SPADE_ETYPE_CONTROLLEDBY:
-      spade_pipe << "type:WasControlledBy time:" << instance
+      spade_ss << "type:WasControlledBy time:" << instance
                  << " from:" << from << " to:" << to << " " << vals << std::endl;
       break;
   }
-  spade_pipe.close();
+  const std::string to_write = spade_ss.str();
+  spade_buffer.push_front(std::move(to_write));
   return 0;
 }
 
 int
 SimpleSwitch::spade_setup_ports() {
   std::map<bm::DevMgrIface::port_t, bm::DevMgrIface::PortInfo> portinfo = get_port_info();
+  int c = 0;
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
-    spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:swport_in num:"+std::to_string(it->first));
-    if (uid == SPADE_UID_MAX) return -1;
-    spade_port_in_ids.insert({it->first, uid});
+    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + c, "subtype:swport_in num:"+std::to_string(it->first));
+    if (rc != 0) return -1;
+    spade_port_in_ids.insert({it->first, spade_switch_id + c++});
   }
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
-    spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:swport_out num:"+std::to_string(it->first));
-    if (uid == SPADE_UID_MAX) return -1;
-    spade_port_out_ids.insert({it->first, uid});
+    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + c, "subtype:swport_out num:"+std::to_string(it->first));
+    if (rc != 0) return -1;
+    spade_port_out_ids.insert({it->first, spade_switch_id + c++});
   }
-  spade_uid_t uid = spade_send_vertex(SPADE_VTYPE_PROCESS, "subtype:drop num:"+std::to_string(get_drop_port()));
-  if (uid == SPADE_UID_MAX) return -1;
-  spade_port_out_ids.insert({get_drop_port(), uid});
+  int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + c, "subtype:drop num:"+std::to_string(get_drop_port()));
+  if (rc != 0) return -1;
+  spade_port_out_ids.insert({get_drop_port(), spade_switch_id + c});
   return 0;
 }
 
@@ -375,6 +415,7 @@ SimpleSwitch::start_and_return_() {
     threads_.push_back(std::thread(&SimpleSwitch::egress_thread, this, i));
   }
   threads_.push_back(std::thread(&SimpleSwitch::transmit_thread, this));
+  threads_.push_back(std::thread(&SimpleSwitch::spade_thread, this));
   ra_update_proghash();
 }
 
@@ -400,6 +441,7 @@ SimpleSwitch::~SimpleSwitch() {
 #endif
   }
   output_buffer.push_front(nullptr);
+  spade_buffer->push_front("");
   for (auto& thread_ : threads_) {
     thread_.join();
   }
@@ -629,15 +671,16 @@ SimpleSwitch::ingress_thread() {
     spade_ss << "subtype:packet_in size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
              << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
              << (int)get_packet_etype(packet.get());
-    spade_uid_t input_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
-    if (input_uid == SPADE_UID_MAX) {
+    spade_uid_t input_uid = spade_switch_id + (packet->get_packet_id() * 10) + packet->get_copy_id();
+    int spade_rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
+    if (spade_rc != 0) {
       BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress vertex")
     }
     else {
       RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
-      spade_uid_t add_edge_status = spade_send_edge(SPADE_ETYPE_GENERATEDBY, input_uid,
+      spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, input_uid,
                                                   spade_port_in_ids.find(packet->get_ingress_port())->second, "");
-      if (add_edge_status != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
+      if (spade_rc != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
     }
 
     parser->parse(packet.get());
@@ -947,8 +990,9 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     spade_ss << "subtype:packet_out size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
              << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
              << (int)get_packet_etype(packet.get());
-    spade_uid_t output_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
-    if (output_uid == SPADE_UID_MAX) {
+    spade_uid_t output_uid = spade_switch_id + (packet->get_packet_id()*10) + packet->get_copy_id();
+    int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
+    if (rc != 0) {
       BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
     }
     else {
