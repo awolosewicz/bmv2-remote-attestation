@@ -130,6 +130,7 @@ class SimpleSwitch : public Switch {
   static constexpr uint32_t default_spade_id = 0;
   std::string loaded_config;
   spade_uid_t spade_prev_prog = 0;
+  uint32_t spade_uid_ctr = 0;
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_in_ids {};
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_out_ids {};
   std::unordered_map<std::string, spade_uid_t> spade_register_ids {};
@@ -205,8 +206,8 @@ class SimpleSwitch : public Switch {
     return enable_spade;
   }
 
-  spade_uid_t spade_send_vertex(int type, spade_uit_t spade_uid, std::string vals);
-  spade_uid_t spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::string vals);
+  int spade_send_vertex(int type, spade_uid_t spade_uid, std::string vals);
+  int spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::string vals);
   int spade_setup_ports();
 
   // RA Register Access
@@ -238,13 +239,15 @@ class SimpleSwitch : public Switch {
     }
     auto it = spade_register_ids.find(register_name);
     if (it == spade_register_ids.end()) {
-      spade_uid_t register_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, 
-                                                "subtype:register register:"+register_name+" MD5:"+hash_ss.str());
+      spade_uid_t register_uid = spade_switch_id + spade_uid_ctr++;
+      int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, register_uid,
+                                 "subtype:register register:"+register_name+" MD5:"+hash_ss.str());
       spade_register_ids.insert({register_name, register_uid});
     }
     else {
-      spade_uid_t cur_register_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, 
-                                                    "subtype:register register:"+register_name+" MD5::"+hash_ss.str());
+      spade_uid_t cur_register_uid = spade_switch_id + spade_uid_ctr++;
+      int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, cur_register_uid,
+                                 "subtype:register register:"+register_name+" MD5::"+hash_ss.str());
       spade_uid_t prev_register_uid = it->second;
       spade_send_edge(SPADE_ETYPE_DERIVEDFROM, cur_register_uid, prev_register_uid, spade_str);
       it->second = cur_register_uid;
@@ -287,13 +290,15 @@ class SimpleSwitch : public Switch {
     }
     auto it = spade_table_ids.find(table_name);
     if (it == spade_table_ids.end()) {
-      spade_uid_t table_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, 
-                                                "subtype:table table:"+table_name+" MD5:"+hash_ss.str()+" "+spade_str);
+      spade_uid_t table_uid = spade_switch_id + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, table_uid,
+                        "subtype:table table:"+table_name+" MD5:"+hash_ss.str()+" "+spade_str);
       spade_table_ids.insert({table_name, table_uid});
     }
     else {
-      spade_uid_t cur_table_uid = spade_send_vertex(SPADE_VTYPE_ARTIFACT, 
-                                                    "subtype:table table:"+table_name+" MD5:"+hash_ss.str());
+      spade_uid_t cur_table_uid = spade_switch_id + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, cur_table_uid,
+                        "subtype:table table:"+table_name+" MD5:"+hash_ss.str());
       spade_uid_t prev_table_uid = it->second;
       spade_send_edge(SPADE_ETYPE_DERIVEDFROM, cur_table_uid, prev_table_uid, spade_str);
       it->second = cur_table_uid;
@@ -316,10 +321,12 @@ class SimpleSwitch : public Switch {
       hash_ss << (int)prog_md5[i];
     }
     if (spade_prev_prog == 0) {
-      spade_prev_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
+      spade_prev_prog = spade_switch_id + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_prev_prog, "subtype:program MD5:"+hash_ss.str());
     }
     else {
-      spade_uid_t spade_cur_prog = spade_send_vertex(SPADE_VTYPE_ARTIFACT, "subtype:program MD5:"+hash_ss.str());
+      spade_uid_t spade_cur_prog = spade_switch_id + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_cur_prog, "subtype:program MD5:"+hash_ss.str());
       spade_send_edge(SPADE_ETYPE_DERIVEDFROM, spade_cur_prog, spade_prev_prog, "command:swap_configs");
       spade_prev_prog = spade_cur_prog;
     }

@@ -279,7 +279,7 @@ SimpleSwitch::spade_thread() {
     while (1) {
       std::string output;
       spade_buffer.pop_back(&output);
-      if (output = "") break;
+      if (output == "") break;
       spade_pipe << output;
     }
     spade_pipe.close();
@@ -353,20 +353,19 @@ SimpleSwitch::spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::s
 int
 SimpleSwitch::spade_setup_ports() {
   std::map<bm::DevMgrIface::port_t, bm::DevMgrIface::PortInfo> portinfo = get_port_info();
-  int c = 0;
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
-    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + c, "subtype:swport_in num:"+std::to_string(it->first));
+    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + spade_uid_ctr, "subtype:swport_in num:"+std::to_string(it->first));
     if (rc != 0) return -1;
-    spade_port_in_ids.insert({it->first, spade_switch_id + c++});
+    spade_port_in_ids.insert({it->first, spade_switch_id + spade_uid_ctr++});
   }
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
-    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + c, "subtype:swport_out num:"+std::to_string(it->first));
+    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + spade_uid_ctr, "subtype:swport_out num:"+std::to_string(it->first));
     if (rc != 0) return -1;
-    spade_port_out_ids.insert({it->first, spade_switch_id + c++});
+    spade_port_out_ids.insert({it->first, spade_switch_id + spade_uid_ctr++});
   }
-  int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + c, "subtype:drop num:"+std::to_string(get_drop_port()));
+  int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, spade_switch_id + spade_uid_ctr, "subtype:drop num:"+std::to_string(get_drop_port()));
   if (rc != 0) return -1;
-  spade_port_out_ids.insert({get_drop_port(), spade_switch_id + c});
+  spade_port_out_ids.insert({get_drop_port(), spade_switch_id + spade_uid_ctr++});
   return 0;
 }
 
@@ -441,7 +440,7 @@ SimpleSwitch::~SimpleSwitch() {
 #endif
   }
   output_buffer.push_front(nullptr);
-  spade_buffer->push_front("");
+  spade_buffer.push_front("");
   for (auto& thread_ : threads_) {
     thread_.join();
   }
@@ -672,7 +671,7 @@ SimpleSwitch::ingress_thread() {
              << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
              << (int)get_packet_etype(packet.get());
     spade_uid_t input_uid = spade_switch_id + (packet->get_packet_id() * 10) + packet->get_copy_id();
-    int spade_rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
+    int spade_rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, input_uid, spade_ss.str());
     if (spade_rc != 0) {
       BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress vertex")
     }
@@ -991,7 +990,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
              << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
              << (int)get_packet_etype(packet.get());
     spade_uid_t output_uid = spade_switch_id + (packet->get_packet_id()*10) + packet->get_copy_id();
-    int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_ss.str());
+    int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, output_uid, spade_ss.str());
     if (rc != 0) {
       BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
     }
