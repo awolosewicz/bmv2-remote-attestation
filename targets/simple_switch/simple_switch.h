@@ -205,17 +205,12 @@ class SimpleSwitch : public Switch {
     return drop_port;
   }
 
-  std::string get_spade_file() const {
-    return spade_file;
-  }
-
-  bool get_enable_spade() const {
-    return enable_spade;
-  }
-
   int spade_send_vertex(int type, uint64_t instance, spade_uid_t spade_uid, std::string vals);
   int spade_send_edge(int type, uint64_t instance, spade_uid_t from, spade_uid_t to, std::string vals);
   int spade_setup_ports();
+  std::string get_spade_file() const;
+  bool get_enable_spade() const;
+  int get_spade_cli_id() const;
 
   // RA Register Access
   void set_ra_registers(unsigned char *val, unsigned int idx);

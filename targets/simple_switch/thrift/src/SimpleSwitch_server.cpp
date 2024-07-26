@@ -141,6 +141,21 @@ class SimpleSwitchHandler : virtual public SimpleSwitchIf {
     return static_cast<int64_t>(switch_->get_time_since_epoch_us());
   }
 
+  void get_spade_file(std::string& _return) {
+    bm::Logger::get()->trace("bm_get_spade_file");
+    _return.append(switch_->get_spade_file());
+  }
+
+  bool get_spade_enabled() {
+    bm::Logger::get()->trace("bm_get_spade_enabled");
+    return (switch_->get_enable_spade());
+  }
+
+  int32_t get_spade_cli_id() {
+    bm::Logger::get()->trace("bm_get_spade_enabled");
+    return (switch_->get_spade_cli_id());
+  }
+
  private:
   SimpleSwitch *switch_;
 };

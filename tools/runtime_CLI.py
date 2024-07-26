@@ -29,7 +29,6 @@ import json
 import time
 from functools import wraps
 import bmpy_utils as utils
-import hashlib
 
 
 from bm_runtime.standard import Standard
@@ -67,41 +66,9 @@ TableType = enum('TableType', 'simple', 'indirect', 'indirect_ws')
 ResType = enum('ResType', 'table', 'action_prof', 'action', 'meter_array',
                'counter_array', 'register_array', 'parse_vset')
 
-    
-# This is hard-coded for testing - a better solution is probably to
-# pull the pipe from a get() command on startup, or CLI launch option
-spade_enabled = False
-spade_file = "/home/Shared/spade_pipe"
-spade_CLI_uid = 1000000
-spade_r_uid = spade_CLI_uid + 1
-spade_t_uid = spade_r_uid + 1
-spade_p_uid = spade_t_uid + 1
-spade_b_uid = spade_p_uid + 1
-
-# SPADE functions used later
-def init_spade():
-    if not spade_enabled:
-        return
-    spade_pipe = open(spade_file, 'a')
-    spade_pipe.write(f"type:Process id:{spade_CLI_uid} subtype:CLI\n")
-    spade_pipe.write(f"type:Artifact id:{spade_r_uid} subtype:CLI_reg\n")
-    spade_pipe.write(f"type:Artifact id:{spade_t_uid} subtype:CLI_tbl\n")
-    spade_pipe.write(f"type:Artifact id:{spade_p_uid} subtype:CLI_prog\n")
-    spade_pipe.write(f"type:Artifact id:{spade_b_uid} subtype:CLI_loaded_prog\n")
-    spade_pipe.close()
-
-def spade_send_edge(type, from_uid, to_uid, vals):
-    if not spade_enabled:
-        return
-    spade_pipe = open(spade_file, 'a')
-    print(f"Sending Edge type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
-    spade_pipe.write(f"type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
-    spade_pipe.close()
-
 def bytes_to_string(byte_array):
     form = 'B' * len(byte_array)
     return struct.pack(form, *byte_array)
-
 
 def table_error_name(x):
     return TableOperationErrorCode._VALUES_TO_NAMES[x]
@@ -293,6 +260,59 @@ class ParseVSet:
     def parse_vset_str(self):
         return "{0:30} [compressed bitwidth:{1}]".format(
             self.name, self.bitwidth)
+    
+# # This is hard-coded for testing - a better solution is probably to
+# # pull the pipe from a get() command on startup, or CLI launch option
+# spade_enabled = False
+# spade_file = "/home/Shared/spade_pipe"
+# spade_CLI_uid = 1000000
+# spade_r_uid = spade_CLI_uid + 1
+# spade_t_uid = spade_r_uid + 1
+# spade_p_uid = spade_t_uid + 1
+# spade_b_uid = spade_p_uid + 1
+
+# # SPADE functions used later
+# def init_spade():
+#     if not spade_enabled:
+#         return
+#     spade_pipe = open(spade_file, 'a')
+#     spade_pipe.write(f"type:Process id:{spade_CLI_uid} subtype:CLI\n")
+#     spade_pipe.write(f"type:Artifact id:{spade_r_uid} subtype:CLI_reg\n")
+#     spade_pipe.write(f"type:Artifact id:{spade_t_uid} subtype:CLI_tbl\n")
+#     spade_pipe.write(f"type:Artifact id:{spade_p_uid} subtype:CLI_prog\n")
+#     spade_pipe.write(f"type:Artifact id:{spade_b_uid} subtype:CLI_loaded_prog\n")
+#     spade_pipe.close()
+
+# class Spade:
+#     # def __new__(enabled, file, switch_id):
+#     #     if not enabled:
+#     #         return None
+        
+#     def __init__(self, enabled=True, file="/home/Shared/spade_pipe", CLI_id=1000000):
+#         self.enabled = enabled
+#         self.file = file
+#         self.CLI_id = CLI_id
+#         self.switch_id = CLI_id // 1000000
+#         self.r_id = CLI_id + 1
+#         self.t_id = CLI_id + 2
+#         self.p_id = CLI_id + 3
+#         self.b_id = CLI_id + 4
+#         if enabled:
+#             spade_pipe = open(file, 'a')
+#             spade_pipe.write(f"type:Process id:{self.CLI_id} subtype:CLI\n")
+#             spade_pipe.write(f"type:Artifact id:{self.r_id} subtype:CLI_reg\n")
+#             spade_pipe.write(f"type:Artifact id:{self.t_id} subtype:CLI_tbl\n")
+#             spade_pipe.write(f"type:Artifact id:{self.p_id} subtype:CLI_prog\n")
+#             spade_pipe.write(f"type:Artifact id:{self.b_id} subtype:CLI_loaded_prog\n")
+#             spade_pipe.close()
+
+#     def send_edge(self, type, from_uid, to_uid, vals):
+#         if not self.enabled:
+#             return
+#         spade_pipe = open(self.file, 'a')
+#         print(f"Sending Edge type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
+#         spade_pipe.write(f"type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
+#         spade_pipe.close()
 
 
 def reset_config():
@@ -1155,7 +1175,6 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_num_entries(self, text, line, start_index, end_index):
         return self._complete_tables(text)
 
-    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_clear(self, line):
         "Clear all entries in a match table (direct or indirect), but not the default entry: table_clear <table name>"
@@ -1166,16 +1185,11 @@ class RuntimeAPI(cmd.Cmd):
         table_name = args[0]
         table = self.get_res("table", table_name, ResType.table)
 
-        cmd_in = line.replace(" ", "\\ ")
-        cmd_in = "command:table_clear\\ "+cmd_in
-        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
-
         self.client.bm_mt_clear_entries(0, table.name, False)
 
     def complete_table_clear(self, text, line, start_index, end_index):
         return self._complete_tables(text)
 
-    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_add(self, line):
         "Add entry to a match table: table_add <table name> <action name> <match fields> => <action parameters> [priority]"
@@ -1219,9 +1233,6 @@ class RuntimeAPI(cmd.Cmd):
 
         print("Adding entry to", MatchType.to_str(
             table.match_type), "match table", table_name)
-        cmd_in = line.replace(" ", "\\ ")
-        cmd_in = "command:table_add\\ "+cmd_in
-        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
 
         # disable, maybe a verbose CLI option?
         self.print_table_add(match_key, action_name, runtime_data)
@@ -1265,7 +1276,6 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_set_timeout(self, text, line, start_index, end_index):
         return self._complete_tables(text)
 
-    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_modify(self, line):
         "Add entry to a match table: table_modify <table name> <action name> <entry handle> [action parameters]"
@@ -1295,10 +1305,6 @@ class RuntimeAPI(cmd.Cmd):
         print("Modifying entry", entry_handle, "for", MatchType.to_str(
             table.match_type), "match table", table_name)
 
-        cmd_in = line.replace(" ", "\\ ")
-        cmd_in = "command:table_modify\\ "+cmd_in
-        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
-
         entry_handle = self.client.bm_mt_modify_entry(
             0, table.name, entry_handle, action.name, runtime_data
         )
@@ -1306,7 +1312,6 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_modify(self, text, line, start_index, end_index):
         return self._complete_table_and_action(text, line)
 
-    # Modified to write a SPADE edge
     @handle_bad_input
     def do_table_delete(self, line):
         "Delete entry from a match table: table_delete <table name> <entry handle>"
@@ -1323,10 +1328,6 @@ class RuntimeAPI(cmd.Cmd):
             raise UIn_Error("Bad format for entry handle")
 
         print("Deleting entry", entry_handle, "from", table_name)
-
-        cmd_in = line.replace(" ", "\\ ")
-        cmd_in = "command:table_delete\\ "+cmd_in
-        spade_send_edge("WasGeneratedBy", spade_t_uid, spade_CLI_uid, cmd_in)
 
         self.client.bm_mt_delete_entry(0, table.name, entry_handle)
 
@@ -1951,7 +1952,6 @@ class RuntimeAPI(cmd.Cmd):
             print("None for this PRE type")
         print("==========")
 
-    # Modified to add SPADE edge indicating program loaded to switch buffer, with MD5 of the JSON
     @handle_bad_input
     def do_load_new_config_file(self, line):
         "Load new json config: load_new_config_file <path to .json file>"
@@ -1961,20 +1961,6 @@ class RuntimeAPI(cmd.Cmd):
         if not os.path.isfile(filename):
             raise UIn_Error("Not a valid filename")
         print("Loading new Json config")
-        cmd_in = line.replace(" ", "\\ ")
-        cmd_in = "command:load_new_config_file\\ "+cmd_in
-        # Using second read loop to reset pointer
-        with open(filename, 'r') as f:
-            # Reusing from bmpy_utils:check_JSON_md5
-            # Changed formating to :0X (to match BMv2 side), ord(c) to c due to error
-            m = hashlib.md5()
-            for L in f:
-                m.update(L.encode())
-            md5sum = m.digest()
-            md5sum_str = "".join("{:0X}".format(c) for c in md5sum)
-            cmd_in  = cmd_in + " MD5:0x" + md5sum_str
-            spade_send_edge("Used", spade_CLI_uid, spade_b_uid, cmd_in)
-            f.close()
         with open(filename, 'r') as f:
             json_str = f.read()
             try:
@@ -1984,13 +1970,10 @@ class RuntimeAPI(cmd.Cmd):
             self.client.bm_load_new_config(json_str)
             load_json_str(json_str)
 
-    # Modified to add SPADE edges indicating the program was swapped
     @handle_bad_input
     def do_swap_configs(self, line):
         "Swap the 2 existing configs, need to have called load_new_config_file before"
         print("Swapping configs")
-        spade_send_edge("WasGeneratedBy", spade_p_uid, spade_CLI_uid, "command:swap_configs")
-        spade_send_edge("WasDerivedFrom", spade_p_uid, spade_b_uid, "")
         self.client.bm_swap_configs()
 
     @handle_bad_input
@@ -2191,7 +2174,6 @@ class RuntimeAPI(cmd.Cmd):
     def complete_register_read(self, text, line, start_index, end_index):
         return self._complete_registers(text)
 
-    # Modified to write a SPADE edge
     @handle_bad_input
     def do_register_write(self, line):
         "Write register value: register_write <name> <index> <value>"
@@ -2210,15 +2192,11 @@ class RuntimeAPI(cmd.Cmd):
             value = int(value)
         except:
             raise UIn_Error("Bad format for value, must be an integer")
-        cmd_in = line.replace(" ", "\\ ")
-        cmd_in = "command:register_write\\ "+cmd_in
-        spade_send_edge("WasGeneratedBy", spade_r_uid, spade_CLI_uid, cmd_in)
         self.client.bm_register_write(0, register.name, index, value)
 
     def complete_register_write(self, text, line, start_index, end_index):
         return self._complete_registers(text)
 
-    # Modified to write a SPADE edge
     @handle_bad_input
     def do_register_reset(self, line):
         "Reset all the cells in the register array to 0: register_reset <name>"
@@ -2227,9 +2205,6 @@ class RuntimeAPI(cmd.Cmd):
         register_name = args[0]
         register = self.get_res("register", register_name,
                                 ResType.register_array)
-        cmd_in = line.replace(" ", "\\ ")
-        cmd_in = "command:register_reset\\ "+cmd_in
-        spade_send_edge("WasGeneratedBy", spade_r_uid, spade_CLI_uid, cmd_in)
         self.client.bm_register_reset(0, register.name)
 
     def complete_register_reset(self, text, line, start_index, end_index):

@@ -21,6 +21,7 @@
 
 import runtime_CLI
 from runtime_CLI import UIn_Error
+import hashlib
 
 from functools import wraps
 import os
@@ -40,6 +41,39 @@ def handle_bad_input(f):
             print("Invalid mirroring operation (%s)" % error)
     return handle
 
+
+class Spade:
+    # def __new__(enabled, file, switch_id):
+    #     if not enabled:
+    #         return None
+        
+    def __init__(self, enabled=True, file="/home/Shared/spade_pipe", CLI_id=1000000):
+        self.enabled = enabled
+        self.file = file
+        self.CLI_id = CLI_id
+        self.switch_id = CLI_id // 1000000
+        self.r_id = CLI_id + 1
+        self.t_id = CLI_id + 2
+        self.p_id = CLI_id + 3
+        self.b_id = CLI_id + 4
+        self.nextuid = CLI_id + 5
+        if enabled:
+            spade_pipe = open(file, 'a')
+            spade_pipe.write(f"type:Process id:{self.CLI_id} subtype:CLI\n")
+            spade_pipe.write(f"type:Artifact id:{self.r_id} subtype:CLI_reg\n")
+            spade_pipe.write(f"type:Artifact id:{self.t_id} subtype:CLI_tbl\n")
+            spade_pipe.write(f"type:Artifact id:{self.p_id} subtype:CLI_prog\n")
+            spade_pipe.write(f"type:Artifact id:{self.b_id} subtype:CLI_loaded_prog\n")
+            spade_pipe.close()
+
+    def send_edge(self, type, from_uid, to_uid, vals):
+        if not self.enabled:
+            return
+        spade_pipe = open(self.file, 'a')
+        print(f"Sending Edge type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
+        spade_pipe.write(f"type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
+        spade_pipe.close()
+
 class SimpleSwitchAPI(runtime_CLI.RuntimeAPI):
     @staticmethod
     def get_thrift_services():
@@ -49,6 +83,91 @@ class SimpleSwitchAPI(runtime_CLI.RuntimeAPI):
         runtime_CLI.RuntimeAPI.__init__(self, pre_type,
                                         standard_client, mc_client)
         self.sswitch_client = sswitch_client
+        spade_enabled = self.sswitch_client.get_spade_enabled()
+        spade_file = self.sswitch_client.get_spade_file()
+        spade_CLI_id = self.sswitch_client.get_spade_cli_id()
+        if spade_enabled:
+            self.spade = Spade(spade_enabled, spade_file, spade_CLI_id)
+
+    # Modified to write a SPADE edge
+    @handle_bad_input
+    def do_table_clear(self, line):
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_clear\\ "+cmd_in
+        self.spade.send_edge("WasGeneratedBy", self.spade.t_id, self.spade.CLI_id, cmd_in)
+        runtime_CLI.do_table_clear(self, line)
+    
+    # Modified to write a SPADE edge
+    @handle_bad_input
+    def do_table_add(self, line):
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_add\\ "+cmd_in
+        self.spade.send_edge("WasGeneratedBy", self.spade.t_id, self.spade.CLI_id, cmd_in)
+        runtime_CLI.do_table_add(self, line)
+
+    # Modified to write a SPADE edge
+    @handle_bad_input
+    def do_table_modify(self, line):
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_modify\\ "+cmd_in
+        self.spade.send_edge("WasGeneratedBy", self.spade.t_id, self.spade.CLI_id, cmd_in)
+        runtime_CLI.do_table_modify(self, line)
+
+    # Modified to write a SPADE edge
+    @handle_bad_input
+    def do_table_delete(self, line):
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:table_delete\\ "+cmd_in
+        self.spade.send_edge("WasGeneratedBy", self.spade.t_id, self.spade.CLI_id, cmd_in)
+        runtime_CLI.do_table_delete(self, line)
+
+    # Modified to add SPADE edge indicating program loaded to switch buffer, with MD5 of the JSON
+    @handle_bad_input
+    def do_load_new_config_file(self, line):
+        "Load new json config: load_new_config_file <path to .json file>"
+        args = line.split()
+        self.exactly_n_args(args, 1)
+        filename = args[0]
+        if not os.path.isfile(filename):
+            raise UIn_Error("Not a valid filename")
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:load_new_config_file\\ "+cmd_in
+        # Using second read loop to reset pointer
+        with open(filename, 'r') as f:
+            # Reusing from bmpy_utils:check_JSON_md5
+            # Changed formating to :0X (to match BMv2 side), ord(c) to c due to error
+            m = hashlib.md5()
+            for L in f:
+                m.update(L.encode())
+            md5sum = m.digest()
+            md5sum_str = "".join("{:0X}".format(c) for c in md5sum)
+            cmd_in  = cmd_in + " MD5:0x" + md5sum_str
+            self.spade.send_edge("Used", self.spade.CLI_id, self.spade.b_id, cmd_in)
+            f.close()
+        runtime_CLI.do_load_new_config_file(self, line)
+
+    # Modified to add SPADE edges indicating the program was swapped
+    @handle_bad_input
+    def do_swap_configs(self, line):
+        self.spade.send_edge("WasGeneratedBy", self.spade.p_id, self.spade.CLI_id, "command:swap_configs")
+        self.spade.send_edge("WasDerivedFrom", self.spade.p_id, self.spade.b_id, "")
+        runtime_CLI.do_swap_configs(self, line)
+
+    # Modified to write a SPADE edge
+    @handle_bad_input
+    def do_register_write(self, line):
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:register_write\\ "+cmd_in
+        self.spade.send_edge("WasGeneratedBy", self.spade.r_id, self.spade.CLI_id, cmd_in)
+        runtime_CLI.do_register_write(self, line)
+
+    # Modified to write a SPADE edge
+    @handle_bad_input
+    def do_register_reset(self, line):
+        cmd_in = line.replace(" ", "\\ ")
+        cmd_in = "command:register_reset\\ "+cmd_in
+        self.spade.send_edge("WasGeneratedBy", self.spade.r_id, self.spade.CLI_id, cmd_in)
+        runtime_CLI.do_register_reset(self, line)
 
     @handle_bad_input
     def do_set_queue_depth(self, line):
@@ -134,7 +253,6 @@ def main():
     )
 
     runtime_CLI.load_json_config(standard_client, args.json)
-    runtime_CLI.init_spade()
 
     SimpleSwitchAPI(args.pre, standard_client, mc_client, sswitch_client).cmdloop()
 

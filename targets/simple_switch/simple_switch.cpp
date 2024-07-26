@@ -275,7 +275,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade
 void
 SimpleSwitch::spade_thread() {
   BMLOG_DEBUG("SPADE thread started");
-  std::ofstream spade_pipe (get_spade_file(), std::ios::out);
+  std::ofstream spade_pipe (spade_file, std::ios::out);
   if (!spade_pipe.is_open()) {
     BMLOG_DEBUG("Failed to open SPADE pipe: {}", strerror(errno));
   }
@@ -376,6 +376,21 @@ SimpleSwitch::spade_setup_ports() {
   if (rc != 0) return -1;
   spade_port_out_ids.insert({get_drop_port(), spade_switch_id_special + spade_uid_ctr++});
   return 0;
+}
+
+std::string
+SimpleSwitch::get_spade_file() const {
+  return spade_file;
+}
+
+bool
+SimpleSwitch::get_enable_spade() const {
+  return enable_spade;
+}
+
+int
+SimpleSwitch::get_spade_cli_id() const {
+  return spade_switch_id / 100;
 }
 
 int
