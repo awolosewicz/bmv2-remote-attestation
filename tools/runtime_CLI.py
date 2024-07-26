@@ -1975,7 +1975,7 @@ class RuntimeAPI(cmd.Cmd):
             cmd_in  = cmd_in + " MD5:0x" + md5sum_str
             spade_send_edge("Used", spade_CLI_uid, spade_b_uid, cmd_in)
             f.close()
-        with open("/home/ubuntu/clone.json", 'r') as f:
+        with open(filename, 'r') as f:
             json_str = f.read()
             try:
                 json.loads(json_str)

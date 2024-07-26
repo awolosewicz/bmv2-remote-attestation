@@ -58,6 +58,7 @@
 #define SPADE_ETYPE_TRIGGEREDBY 3
 #define SPADE_ETYPE_DERIVEDFROM 4
 #define SPADE_ETYPE_CONTROLLEDBY 5
+#define SPADE_SWITCH_ID_MULT 100000000 // 100M
 
 using ts_res = std::chrono::microseconds;
 using std::chrono::duration_cast;
@@ -127,7 +128,9 @@ class SimpleSwitch : public Switch {
   };
 
   static constexpr port_t default_drop_port = 511;
-  static constexpr uint32_t default_spade_id = 0;
+  static constexpr uint32_t default_spade_id = 1;
+  static constexpr uint32_t default_spade_verbosity = 0;
+  static constexpr uint32_t default_spade_period = 10000;
   std::string loaded_config;
   spade_uid_t spade_prev_prog = 0;
   uint32_t spade_uid_ctr = 0;
@@ -135,6 +138,7 @@ class SimpleSwitch : public Switch {
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_out_ids {};
   std::unordered_map<std::string, spade_uid_t> spade_register_ids {};
   std::unordered_map<std::string, spade_uid_t> spade_table_ids {};
+  std::unordered_map<std::string, uint64_t> spade_recorded_flows {};
 
  private:
   using clock = std::chrono::high_resolution_clock;
@@ -153,7 +157,9 @@ class SimpleSwitch : public Switch {
                         port_t drop_port = default_drop_port,
                         bool enable_spade = false,
                         std::string spade_file = "spade_pipe",
-                        uint32_t spade_switch_id = default_spade_id);
+                        uint32_t spade_switch_id = default_spade_id,
+                        uint32_t spade_verbosity = default_spade_verbosity,
+                        uint32_t spade_period = default_spade_period);
 
   ~SimpleSwitch();
 
@@ -180,6 +186,7 @@ class SimpleSwitch : public Switch {
   int set_all_egress_queue_rates(const uint64_t rate_pps);
 
   unsigned short get_packet_etype(bm::Packet* packet);
+  char * get_post_ethernet(bm::Packet* packet);
 
   // returns the number of microseconds elapsed since the switch started
   uint64_t get_time_elapsed_us() const;
@@ -206,8 +213,8 @@ class SimpleSwitch : public Switch {
     return enable_spade;
   }
 
-  int spade_send_vertex(int type, spade_uid_t spade_uid, std::string vals);
-  int spade_send_edge(int type, spade_uid_t from, spade_uid_t to, std::string vals);
+  int spade_send_vertex(int type, uint64_t instance, spade_uid_t spade_uid, std::string vals);
+  int spade_send_edge(int type, uint64_t instance, spade_uid_t from, spade_uid_t to, std::string vals);
   int spade_setup_ports();
 
   // RA Register Access
@@ -219,6 +226,7 @@ class SimpleSwitch : public Switch {
   // Get MD5 of register through hashing all the register elements
   // Uses binary representation of Data to avoid unknown of using Data directly
   void ra_update_reghash(cxt_id_t cxt_id, const std::string &register_name, std::string &spade_str) {
+    uint64_t instance = get_time_since_epoch_us()/1000;
     boost::unique_lock<boost::shared_mutex> lock(ra_reg_mutex);
     MD5_CTX reg_md5_ctx;
     MD5_Init(&reg_md5_ctx);
@@ -238,18 +246,19 @@ class SimpleSwitch : public Switch {
       hash_ss << (int)reg_md5[i];
     }
     auto it = spade_register_ids.find(register_name);
+    uint32_t spade_switch_id_special = spade_switch_id / 10;
     if (it == spade_register_ids.end()) {
-      spade_uid_t register_uid = spade_switch_id + spade_uid_ctr++;
-      int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, register_uid,
-                                 "subtype:register register:"+register_name+" MD5:"+hash_ss.str());
+      spade_uid_t register_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, register_uid,
+                        "subtype:register register:"+register_name+" MD5:"+hash_ss.str());
       spade_register_ids.insert({register_name, register_uid});
     }
     else {
-      spade_uid_t cur_register_uid = spade_switch_id + spade_uid_ctr++;
-      int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, cur_register_uid,
-                                 "subtype:register register:"+register_name+" MD5::"+hash_ss.str());
+      spade_uid_t cur_register_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, cur_register_uid,
+                        "subtype:register register:"+register_name+" MD5::"+hash_ss.str());
       spade_uid_t prev_register_uid = it->second;
-      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, cur_register_uid, prev_register_uid, spade_str);
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, cur_register_uid, prev_register_uid, spade_str);
       it->second = cur_register_uid;
     }
   }
@@ -257,6 +266,7 @@ class SimpleSwitch : public Switch {
   // Get MD5 of tables through hashing all the entries
   // An entry, in this case, is the match key(s), associated function, and function data
   void ra_update_tblhash(cxt_id_t cxt_id, const std::string &table_name, std::string &spade_str) {
+    uint64_t instance = get_time_since_epoch_us()/1000;
     boost::unique_lock<boost::shared_mutex> lock(ra_tbl_mutex);
     MD5_CTX tbl_md5_ctx;
     MD5_Init(&tbl_md5_ctx);
@@ -289,23 +299,25 @@ class SimpleSwitch : public Switch {
       hash_ss << (int)tbl_md5[i];
     }
     auto it = spade_table_ids.find(table_name);
+    uint32_t spade_switch_id_special = spade_switch_id / 10;
     if (it == spade_table_ids.end()) {
-      spade_uid_t table_uid = spade_switch_id + spade_uid_ctr++;
-      spade_send_vertex(SPADE_VTYPE_ARTIFACT, table_uid,
+      spade_uid_t table_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, table_uid,
                         "subtype:table table:"+table_name+" MD5:"+hash_ss.str()+" "+spade_str);
       spade_table_ids.insert({table_name, table_uid});
     }
     else {
-      spade_uid_t cur_table_uid = spade_switch_id + spade_uid_ctr++;
-      spade_send_vertex(SPADE_VTYPE_ARTIFACT, cur_table_uid,
+      spade_uid_t cur_table_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, cur_table_uid,
                         "subtype:table table:"+table_name+" MD5:"+hash_ss.str());
       spade_uid_t prev_table_uid = it->second;
-      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, cur_table_uid, prev_table_uid, spade_str);
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, cur_table_uid, prev_table_uid, spade_str);
       it->second = cur_table_uid;
     }
   }
 
   void ra_update_proghash() {
+    uint64_t instance = get_time_since_epoch_us()/1000;
     boost::unique_lock<boost::shared_mutex> lock(ra_prog_mutex);
     MD5_CTX prog_md5_ctx;
     MD5_Init(&prog_md5_ctx);
@@ -320,14 +332,15 @@ class SimpleSwitch : public Switch {
     for (int i = 0; i < 16; ++i) {
       hash_ss << (int)prog_md5[i];
     }
+    uint32_t spade_switch_id_special = spade_switch_id / 10;
     if (spade_prev_prog == 0) {
-      spade_prev_prog = spade_switch_id + spade_uid_ctr++;
-      spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_prev_prog, "subtype:program MD5:"+hash_ss.str());
+      spade_prev_prog = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, spade_prev_prog, "subtype:program MD5:"+hash_ss.str());
     }
     else {
-      spade_uid_t spade_cur_prog = spade_switch_id + spade_uid_ctr++;
-      spade_send_vertex(SPADE_VTYPE_ARTIFACT, spade_cur_prog, "subtype:program MD5:"+hash_ss.str());
-      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, spade_cur_prog, spade_prev_prog, "command:swap_configs");
+      spade_uid_t spade_cur_prog = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, spade_cur_prog, "subtype:program MD5:"+hash_ss.str());
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, spade_cur_prog, spade_prev_prog, "command:swap_configs");
       spade_prev_prog = spade_cur_prog;
     }
   }
@@ -534,8 +547,8 @@ class SimpleSwitch : public Switch {
   bool enable_spade;
   std::string spade_file;
   uint32_t spade_switch_id;
-  // std::unique_ptr<SpadeBuffer> spade_buffer;
-  Queue<std::string> spade_buffer;
+  uint32_t spade_verbosity;
+  uint32_t spade_period;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the
@@ -547,6 +560,7 @@ class SimpleSwitch : public Switch {
 #endif
   egress_buffers;
   Queue<std::unique_ptr<Packet> > output_buffer;
+  Queue<std::string> spade_buffer;
   TransmitFn my_transmit_fn;
   std::shared_ptr<McSimplePreLAG> pre;
   clock::time_point start;
