@@ -26,7 +26,6 @@ import os
 import sys
 import struct
 import json
-import time
 from functools import wraps
 import bmpy_utils as utils
 

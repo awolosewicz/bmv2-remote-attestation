@@ -358,23 +358,34 @@ SimpleSwitch::spade_send_edge(int type, uint64_t instance, spade_uid_t from, spa
 }
 
 int
-SimpleSwitch::spade_setup_ports() {
+SimpleSwitch::spade_setup_ports() { // and CLI vertices
   std::map<bm::DevMgrIface::port_t, bm::DevMgrIface::PortInfo> portinfo = get_port_info();
   uint64_t instance = get_time_since_epoch_us()/1000;
   uint32_t spade_switch_id_special = spade_switch_id / 10;
+  uint32_t spade_cli_id = spade_switch_id / 100;
+  int rc = -1;
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
-    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, instance, spade_switch_id_special + spade_uid_ctr, "subtype:swport_in num:"+std::to_string(it->first));
+    rc = spade_send_vertex(SPADE_VTYPE_PROCESS, instance, spade_switch_id_special + spade_uid_ctr, "subtype:swport_in num:"+std::to_string(it->first));
     if (rc != 0) return -1;
     spade_port_in_ids.insert({it->first, spade_switch_id_special + spade_uid_ctr++});
   }
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {
-    int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, instance, spade_switch_id_special + spade_uid_ctr, "subtype:swport_out num:"+std::to_string(it->first));
+    rc = spade_send_vertex(SPADE_VTYPE_PROCESS, instance, spade_switch_id_special + spade_uid_ctr, "subtype:swport_out num:"+std::to_string(it->first));
     if (rc != 0) return -1;
     spade_port_out_ids.insert({it->first, spade_switch_id_special + spade_uid_ctr++});
   }
-  int rc = spade_send_vertex(SPADE_VTYPE_PROCESS, instance, spade_switch_id_special + spade_uid_ctr, "subtype:drop num:"+std::to_string(get_drop_port()));
+  rc = spade_send_vertex(SPADE_VTYPE_PROCESS, instance, spade_switch_id_special + spade_uid_ctr, "subtype:drop num:"+std::to_string(get_drop_port()));
   if (rc != 0) return -1;
   spade_port_out_ids.insert({get_drop_port(), spade_switch_id_special + spade_uid_ctr++});
+
+  rc = spade_send_vertex(SPADE_VTYPE_PROCESS, instance, spade_cli_id, "subtype:CLI");
+  if (rc != 0) return -1;
+
+  for (int i = 0; i < 4; ++i) {
+    const std::string subtypes[4] = {"CLI_reg", "CLI_tbl", "CLI_prog", "CLI_loaded_prog"}; 
+    rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, spade_cli_id + i+1, "subtype:"+subtypes[i]);
+    if (rc != 0) return -1;
+  }
   return 0;
 }
 
