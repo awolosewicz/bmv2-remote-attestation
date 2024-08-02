@@ -252,7 +252,7 @@ class SimpleSwitch : public Switch {
     else {
       spade_uid_t cur_register_uid = spade_switch_id_special + spade_uid_ctr++;
       spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, cur_register_uid,
-                        "subtype:register register:"+register_name+" MD5::"+hash_ss.str());
+                        "subtype:register register:"+register_name+" MD5:"+hash_ss.str());
       spade_uid_t prev_register_uid = it->second;
       spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, cur_register_uid, prev_register_uid, spade_str);
       it->second = cur_register_uid;

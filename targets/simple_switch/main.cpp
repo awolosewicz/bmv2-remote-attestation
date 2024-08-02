@@ -63,12 +63,13 @@ main(int argc, char* argv[]) {
       "0: Capture every packet alongside size and ethertype\n"
       "1: Capture only unique flows from input to output (or drop) ports\n"
       "2: 0, but additionally include IPv4 and IPv6 addresses and protocols for those packets\n"
-      "3: Capture unique flows based off source and destination IPv4/IPv6 addresses");
+      "3: Capture unique flows based off source and destination IPv4/IPv6 addresses\n"
+      "4: 3, but also unique based off TCP/UDP source and destination ports");
   simple_switch_parser.add_uint_option(
       "spade-period",
       "The length of the polling period in ms where, for verbosity options that capture unique flows,\n"
       "duplicate flows will be recorded. For example, a value of 5000 means duplicate flows will be recorded\n"
-      "every 5s as long as the flow occurs within the 5s window (default 10000).");
+      "every 5s as long as the flow occurs within the 5s window (default 10000). 0 captures all flows.");
 
   bm::OptionsParser parser;
   parser.parse(argc, argv, &simple_switch_parser);

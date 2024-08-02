@@ -246,7 +246,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade
                    64, EgressThreadMapper(nb_egress_threads)),
 #endif
     output_buffer(128),
-    spade_buffer(1024),
+    spade_buffer(2048),
     // cannot use std::bind because of a clang bug
     // https://stackoverflow.com/questions/32030141/is-this-incorrect-use-of-stdbind-or-a-compiler-bug
     my_transmit_fn([this](port_t port_num, packet_id_t pkt_id,
@@ -720,82 +720,103 @@ SimpleSwitch::ingress_thread() {
     uint64_t instance = get_time_since_epoch_us()/1000;
     bool do_write_vertex = false;
     bool do_write_edge = false;
-    switch (spade_verbosity) {
-      case 0:
-        {
-          spade_ss << "subtype:packet_in size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
-                  << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
-                  << (int)get_packet_etype(packet.get());
-          do_write_vertex = true;
-          break;
-        }
-      case 3:
-        {
-          std::string src = "";
-          std::string dst = "";
-          std::string prot;
-          bool do_write = false;
-          int etype = (int)get_packet_etype(packet.get());
-          if (etype == 0x0800) {
-            do_write = true;
-            uint8_t * packet_data = (uint8_t *)(get_post_ethernet(packet.get()) + 9); // get to protocol
-            prot = std::to_string(*packet_data);
-            packet_data += 3;
-            for (int i = 0; i < 4; ++i) {
-              src += std::to_string(*packet_data++);
-              if (i < 3) {
-                src += ".";
-              }
-            }
-            for (int i = 0; i < 4; ++i) {
-              dst += std::to_string(*packet_data++);
-              if (i < 3) {
-                dst += ".";
-              }
-            }
+    if (spade_verbosity == 0) {
+      spade_ss << "subtype:packet_in size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
+              << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
+              << (int)get_packet_etype(packet.get());
+      do_write_vertex = true;
+    }
+    else if (spade_verbosity == 3 || spade_verbosity == 4) {
+      std::string src = "";
+      std::string dst = "";
+      std::string prot;
+      std::string srcport = "";
+      std::string dstport = "";
+      bool do_write = false;
+      int etype = (int)get_packet_etype(packet.get());
+      if (etype == 0x0800) {
+        do_write = true;
+        uint8_t * packet_data = (uint8_t *)(get_post_ethernet(packet.get()) + 9); // get to protocol
+        prot = std::to_string(*packet_data);
+        packet_data += 3;
+        for (int i = 0; i < 4; ++i) {
+          src += std::to_string(*packet_data++);
+          if (i < 3) {
+            src += ".";
           }
-          else if (etype == 0x86DD) {
-            do_write = true;
-            uint8_t * packet_data = (uint8_t *)(get_post_ethernet(packet.get()) + 6); // get to protocol
-            prot = std::to_string(*packet_data);
+        }
+        for (int i = 0; i < 4; ++i) {
+          dst += std::to_string(*packet_data++);
+          if (i < 3) {
+            dst += ".";
+          }
+        }
+      }
+      else if (etype == 0x86DD) {
+        do_write = true;
+        uint8_t * packet_data = (uint8_t *)(get_post_ethernet(packet.get()) + 6); // get to protocol
+        prot = std::to_string(*packet_data);
+        packet_data += 2;
+        std::stringstream src_ss;
+        std::stringstream dst_ss;
+        src_ss << std::hex << std::setw(2) << std::setfill('0');
+        dst_ss << std::hex << std::setw(2) << std::setfill('0');
+        for (int i = 0; i < 16; ++i) {
+          src_ss << (int)(*packet_data++);
+          if (i % 2 == 1 && i != 15) {
+            src_ss << "\\:";
+          }
+        }
+        for (int i = 0; i < 16; ++i) {
+          dst_ss << (int)(*packet_data++);
+          if (i % 2 == 1 && i != 15) {
+            dst_ss << "\\:";
+          }
+        }
+        src = src_ss.str();
+        dst = dst_ss.str();
+        if (spade_verbosity == 4) {
+          if (prot == "6" || prot == "17") { // TCP or UDP
+            srcport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
             packet_data += 2;
-            std::stringstream src_ss;
-            std::stringstream dst_ss;
-            src_ss << std::hex << std::setw(2) << std::setfill('0');
-            dst_ss << std::hex << std::setw(2) << std::setfill('0');
-            for (int i = 0; i < 16; ++i) {
-              src_ss << (int)(*packet_data++);
-              if (i % 2 == 1 && i != 15) {
-                src_ss << '\\:';
-              }
-            }
-            for (int i = 0; i < 16; ++i) {
-              dst_ss << (int)(*packet_data++);
-              if (i % 2 == 1 && i != 15) {
-                dst_ss << '\\:';
-              }
-            }
-            src = src_ss.str();
-            dst = dst_ss.str();
+            dstport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
+            packet_data += 2;
           }
-          if (do_write) {
-            spade_ss << "subtype:flow src:" << src << " dst:" << dst << " protocol:" << prot;
-            std::string spade_string = spade_ss.str();
-            auto it = spade_recorded_flows_times.find(spade_string);
-            if (it == spade_recorded_flows_times.end()) {
-              // insert_or_assign not supported with used compiler version
-              spade_recorded_flows_times.insert({spade_string, instance / spade_period});
-              spade_recorded_flows_uids.insert({spade_string, input_uid});
-              do_write_vertex = true;
-            }
-            else if ((instance / spade_period) != it->second) {
-              spade_recorded_flows_times[spade_string] = instance / spade_period;
-              input_uid = spade_recorded_flows_uids[spade_string];
-              do_write_edge = true;
-            }
-          }
-          break;
         }
+      }
+      if (do_write) {
+        spade_ss << "subtype:flow src:" << src << " dst:" << dst << " protocol:" << prot;
+        if (srcport != "") {
+          spade_ss << " srcport:" << srcport << " dstport:" << dstport;
+        }
+        std::string spade_string = spade_ss.str();
+        auto it = spade_recorded_flows_times.find(spade_string);
+        if (spade_period == 0) {
+          if (it == spade_recorded_flows_times.end()) {
+            // insert_or_assign not supported with used compiler version
+            spade_recorded_flows_times.insert({spade_string, instance});
+            spade_recorded_flows_uids.insert({spade_string, input_uid});
+            do_write_vertex = true;
+          }
+          else if (instance != it->second) {
+            spade_recorded_flows_times[spade_string] = instance;
+            input_uid = spade_recorded_flows_uids[spade_string];
+            do_write_edge = true;
+          }
+        }
+        else {
+          if (it == spade_recorded_flows_times.end()) {
+            spade_recorded_flows_times.insert({spade_string, instance / spade_period});
+            spade_recorded_flows_uids.insert({spade_string, input_uid});
+            do_write_vertex = true;
+          }
+          else if ((instance / spade_period) != it->second) {
+            spade_recorded_flows_times[spade_string] = instance / spade_period;
+            input_uid = spade_recorded_flows_uids[spade_string];
+            do_write_edge = true;
+          }
+        }
+      }
     }
     if (do_write_vertex) {
       int spade_rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, input_uid, spade_ss.str());
@@ -803,7 +824,7 @@ SimpleSwitch::ingress_thread() {
         BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress vertex")
       }
     }
-    else if (do_write_vertex || do_write_edge) {
+    if (do_write_vertex || do_write_edge) {
       RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
       int spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, instance, input_uid,
                                      spade_port_in_ids.find(packet->get_ingress_port())->second, "");
@@ -935,8 +956,10 @@ SimpleSwitch::ingress_thread() {
       uint64_t instance = get_time_since_epoch_us()/1000;
       BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of ingress");
       spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());
-      spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(drop_port)->second, input_uid, "");
-      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
+      if (input_uid != 0) {
+        spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(drop_port)->second, input_uid, "");
+        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
+      }
       continue;
     }
     auto &f_instance_type = phv->get_field("standard_metadata.instance_type");
@@ -1045,9 +1068,10 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       uint64_t instance = get_time_since_epoch_us()/1000;
       BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of egress");
       spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());
-      spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(drop_port)->second, input_uid, "");
-      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
-      
+      if (input_uid != 0) {
+        spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(drop_port)->second, input_uid, "");
+        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
+      }
       continue;
     }
 
@@ -1124,31 +1148,26 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     std::stringstream spade_ss;
     spade_uid_t output_uid = spade_switch_id + (packet->get_packet_id() * 10) + packet->get_copy_id() + 1;
     uint64_t instance = get_time_since_epoch_us()/1000;
-    switch (spade_verbosity) {
-      case 0:
-      {
-        spade_ss << "subtype:packet_out size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
-                << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
-                << (int)get_packet_etype(packet.get());
-        int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, output_uid, spade_ss.str());
-        if (rc != 0) {
-          BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
-        }
-        else {
-          spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, spade_prev_prog, "");
-          spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, RegisterAccess::get_spade_input_uid(packet.get()), "");
-          spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, output_uid, "");
-        }
-        break;
+    if (spade_verbosity == 0) {
+      spade_ss << "subtype:packet_out size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
+              << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
+              << (int)get_packet_etype(packet.get());
+      int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, output_uid, spade_ss.str());
+      if (rc != 0) {
+        BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
       }
-      case 3:
-      {
-        if (packet->get_copy_id() != 0) break;
-        spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());;
-        if (input_uid == 0) break;
+      else {
+        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, spade_prev_prog, "");
+        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, RegisterAccess::get_spade_input_uid(packet.get()), "");
+        spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, output_uid, "");
+      }
+    }
+    else if (spade_verbosity == 3 || spade_verbosity == 4) {
+      spade_uid_t input_uid = 0;
+      if (packet->get_copy_id() == 0) input_uid = RegisterAccess::get_spade_input_uid(packet.get());
+      if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
-        spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, "");
-        break;
+        spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, ""); 
       }
     }
     output_buffer.push_front(std::move(packet));
