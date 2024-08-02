@@ -735,7 +735,8 @@ SimpleSwitch::ingress_thread() {
           std::string dst = "";
           std::string prot;
           bool do_write = false;
-          if ((int)get_packet_etype(packet.get()) == 0x0800) {
+          int etype = (int)get_packet_etype(packet.get());
+          if (etype == 0x0800) {
             do_write = true;
             uint8_t * packet_data = (uint8_t *)(get_post_ethernet(packet.get()) + 9); // get to protocol
             prot = std::to_string(*packet_data);
@@ -752,6 +753,30 @@ SimpleSwitch::ingress_thread() {
                 dst += ".";
               }
             }
+          }
+          else if (etype == 0x86DD) {
+            do_write = true;
+            uint8_t * packet_data = (uint8_t *)(get_post_ethernet(packet.get()) + 6); // get to protocol
+            prot = std::to_string(*packet_data);
+            packet_data += 2;
+            std::stringstream src_ss;
+            std::stringstream dst_ss;
+            src_ss << std::hex << std::setw(2) << std::setfill('0');
+            dst_ss << std::hex << std::setw(2) << std::setfill('0');
+            for (int i = 0; i < 16; ++i) {
+              src_ss << *packet_data++;
+              if (i % 2 == 1 && i != 15) {
+                src_ss << ':';
+              }
+            }
+            for (int i = 0; i < 16; ++i) {
+              dst_ss << *packet_data++;
+              if (i % 2 == 1 && i != 15) {
+                dst_ss << ':';
+              }
+            }
+            src = src_ss.str();
+            dst = dst_ss.str();
           }
           if (do_write) {
             spade_ss << "subtype:flow src:" << src << " dst:" << dst << " protocol:" << prot;
