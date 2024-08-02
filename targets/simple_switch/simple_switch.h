@@ -138,7 +138,8 @@ class SimpleSwitch : public Switch {
   std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_out_ids {};
   std::unordered_map<std::string, spade_uid_t> spade_register_ids {};
   std::unordered_map<std::string, spade_uid_t> spade_table_ids {};
-  std::unordered_map<std::string, uint64_t> spade_recorded_flows {};
+  std::unordered_map<std::string, uint64_t> spade_recorded_flows_times {};
+  std::unordered_map<std::string, spade_uid_t> spade_recorded_flows_uids {};
 
  private:
   using clock = std::chrono::high_resolution_clock;

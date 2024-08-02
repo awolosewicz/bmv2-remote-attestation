@@ -71,7 +71,7 @@ class Spade:
         if not self.enabled:
             return
         spade_pipe = open(self.file, 'a')
-        print(f"Sending Edge type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
+        print(f"\nSending Edge type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}")
         spade_pipe.write(f"type:{type} from:{from_uid} to:{to_uid} time:{time.time_ns()//1000} {vals}\n")
         spade_pipe.close()
 

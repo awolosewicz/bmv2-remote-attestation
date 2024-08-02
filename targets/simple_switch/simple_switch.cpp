@@ -275,7 +275,7 @@ SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade
 void
 SimpleSwitch::spade_thread() {
   BMLOG_DEBUG("SPADE thread started");
-  std::ofstream spade_pipe (spade_file, std::ios::out);
+  std::ofstream spade_pipe (spade_file, std::ios::app);
   if (!spade_pipe.is_open()) {
     BMLOG_DEBUG("Failed to open SPADE pipe: {}", strerror(errno));
   }
@@ -719,6 +719,7 @@ SimpleSwitch::ingress_thread() {
     spade_uid_t input_uid = spade_switch_id + (packet->get_packet_id() * 10) + packet->get_copy_id();;
     uint64_t instance = get_time_since_epoch_us()/1000;
     bool do_write_vertex = false;
+    bool do_write_edge = false;
     switch (spade_verbosity) {
       case 0:
         {
@@ -733,7 +734,9 @@ SimpleSwitch::ingress_thread() {
           std::string src = "";
           std::string dst = "";
           std::string prot;
+          bool do_write = false;
           if ((int)get_packet_etype(packet.get()) == 0x0800) {
+            do_write = true;
             uint8_t * packet_data = (uint8_t *)(get_post_ethernet(packet.get()) + 9); // get to protocol
             prot = std::to_string(*packet_data);
             packet_data += 3;
@@ -750,17 +753,21 @@ SimpleSwitch::ingress_thread() {
               }
             }
           }
-          spade_ss << "subtype:flow src:" << src << " dst:" << dst << " protocol:" << prot;
-          std::string spade_string = spade_ss.str();
-          auto it = spade_recorded_flows.find(spade_string);
-          if (it == spade_recorded_flows.end()) {
-            // insert_or_assign not supported with used compiler version
-            spade_recorded_flows.insert({spade_string, instance / spade_period});
-            do_write_vertex = true;
-          }
-          else if ((instance / spade_period) != it->second) {
-            spade_recorded_flows[spade_string] = instance / spade_period;
-            do_write_vertex = true;
+          if (do_write) {
+            spade_ss << "subtype:flow src:" << src << " dst:" << dst << " protocol:" << prot;
+            std::string spade_string = spade_ss.str();
+            auto it = spade_recorded_flows_times.find(spade_string);
+            if (it == spade_recorded_flows_times.end()) {
+              // insert_or_assign not supported with used compiler version
+              spade_recorded_flows_times.insert({spade_string, instance / spade_period});
+              spade_recorded_flows_uids.insert({spade_string, input_uid});
+              do_write_vertex = true;
+            }
+            else if ((instance / spade_period) != it->second) {
+              spade_recorded_flows_times[spade_string] = instance / spade_period;
+              input_uid = spade_recorded_flows_uids[spade_string];
+              do_write_edge = true;
+            }
           }
           break;
         }
@@ -770,12 +777,12 @@ SimpleSwitch::ingress_thread() {
       if (spade_rc != 0) {
         BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress vertex")
       }
-      else {
-        RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
-        spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, instance, input_uid,
-                                   spade_port_in_ids.find(packet->get_ingress_port())->second, "");
-        if (spade_rc != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
-      }
+    }
+    else if (do_write_vertex || do_write_edge) {
+      RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
+      int spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, instance, input_uid,
+                                     spade_port_in_ids.find(packet->get_ingress_port())->second, "");
+      if (spade_rc != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
     }
     else {
       RegisterAccess::set_spade_input_uid(packet.get(), 0); // see packet.h, registers are default-initialized arrays
