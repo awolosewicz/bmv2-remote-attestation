@@ -764,15 +764,15 @@ SimpleSwitch::ingress_thread() {
             src_ss << std::hex << std::setw(2) << std::setfill('0');
             dst_ss << std::hex << std::setw(2) << std::setfill('0');
             for (int i = 0; i < 16; ++i) {
-              src_ss << *packet_data++;
+              src_ss << (int)(*packet_data++);
               if (i % 2 == 1 && i != 15) {
-                src_ss << ':';
+                src_ss << '\\:';
               }
             }
             for (int i = 0; i < 16; ++i) {
-              dst_ss << *packet_data++;
+              dst_ss << (int)(*packet_data++);
               if (i % 2 == 1 && i != 15) {
-                dst_ss << ':';
+                dst_ss << '\\:';
               }
             }
             src = src_ss.str();
