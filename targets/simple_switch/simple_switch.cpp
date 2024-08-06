@@ -725,6 +725,8 @@ SimpleSwitch::ingress_thread() {
       spade_ss << "subtype:packet_in size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
               << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
               << (int)get_packet_etype(packet.get());
+      spade_ss << " regs_MD5:" + registers_ra.total_hash_str << " tbls_MD5:" + tables_ra.total_hash_str
+               << " prog_MD5:" + prog_hash_str;
       do_write_vertex = true;
     }
     else if (spade_verbosity == 3 || spade_verbosity == 4) {
@@ -790,6 +792,8 @@ SimpleSwitch::ingress_thread() {
         if (srcport != "") {
           spade_ss << " srcport:" << srcport << " dstport:" << dstport;
         }
+        spade_ss << " regs_MD5:" + registers_ra.total_hash_str << " tbls_MD5:" + tables_ra.total_hash_str
+                 << " prog_MD5:" + prog_hash_str;
         std::string spade_string = spade_ss.str();
         auto it = spade_recorded_flows_times.find(spade_string);
         if (spade_period == 0) {
@@ -959,7 +963,7 @@ SimpleSwitch::ingress_thread() {
       spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(drop_port)->second, input_uid, "");
-        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
+        //spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
       }
       continue;
     }
@@ -1071,7 +1075,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(drop_port)->second, input_uid, "");
-        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
+        //spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
       }
       continue;
     }
@@ -1154,14 +1158,16 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     uint64_t instance = get_time_since_epoch_us()/1000;
     if (spade_verbosity == 0) {
       spade_ss << "subtype:packet_out size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
-              << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
-              << (int)get_packet_etype(packet.get());
+               << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
+               << (int)get_packet_etype(packet.get());
+      spade_ss << " regs_MD5:" + registers_ra.total_hash_str << " tbls_MD5:" + tables_ra.total_hash_str
+               << " prog_MD5:" + prog_hash_str;
       int rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, output_uid, spade_ss.str());
       if (rc != 0) {
         BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
       }
       else {
-        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, spade_prev_prog, "");
+        //spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, spade_prev_prog, "");
         spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, RegisterAccess::get_spade_input_uid(packet.get()), "");
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, output_uid, "");
       }
@@ -1170,7 +1176,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       spade_uid_t input_uid = 0;
       if (packet->get_copy_id() == 0) input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
-        spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
+        //spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, ""); 
       }
     }
