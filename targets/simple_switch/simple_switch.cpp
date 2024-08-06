@@ -1075,7 +1075,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(drop_port)->second, input_uid, "");
-        //spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
       }
       continue;
     }
@@ -1167,7 +1166,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         BMLOG_DEBUG_PKT(*packet, "Failed to write packet egress vertex")
       }
       else {
-        //spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, spade_prev_prog, "");
         spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, output_uid, RegisterAccess::get_spade_input_uid(packet.get()), "");
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, output_uid, "");
       }
@@ -1176,7 +1174,6 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       spade_uid_t input_uid = 0;
       if (packet->get_copy_id() == 0) input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
-        //spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, input_uid, spade_prev_prog, "");
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, ""); 
       }
     }
