@@ -70,6 +70,9 @@ main(int argc, char* argv[]) {
       "The length of the polling period in ms where, for verbosity options that capture unique flows,\n"
       "duplicate flows will be recorded. For example, a value of 5000 means duplicate flows will be recorded\n"
       "every 5s as long as the flow occurs within the 5s window (default 10000). 0 captures all flows.");
+  simple_switch_parser.add_flag_option(
+      "disable-ra-broadcast",
+      "Disables the ethernet broadcast of RA evidence.");
 
   bm::OptionsParser parser;
   parser.parse(argc, argv, &simple_switch_parser);
@@ -134,8 +137,14 @@ main(int argc, char* argv[]) {
       std::exit(1);
   }
 
+  bool disable_ra_broadcast_flag = false;
+  if (simple_switch_parser.get_flag_option("disable-ra-broadcast", &disable_ra_broadcast_flag)
+      != bm::TargetParserBasic::ReturnCode::SUCCESS) {
+    std::exit(1);
+  }
+
   simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_spade_flag, spade_file, spade_switch_id,
-                                   spade_verbosity, spade_period);
+                                   spade_verbosity, spade_period, disable_ra_broadcast_flag);
   int status = simple_switch->init_from_options_parser(parser);
   if (status != 0) std::exit(status);
   if (enable_spade_flag){

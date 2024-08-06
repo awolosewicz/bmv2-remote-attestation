@@ -160,7 +160,8 @@ class SimpleSwitch : public Switch {
                         std::string spade_file = "spade_pipe",
                         uint32_t spade_switch_id = default_spade_id,
                         uint32_t spade_verbosity = default_spade_verbosity,
-                        uint32_t spade_period = default_spade_period);
+                        uint32_t spade_period = default_spade_period, 
+                        bool disable_ra_broadcast = false);
 
   ~SimpleSwitch();
 
@@ -545,6 +546,7 @@ class SimpleSwitch : public Switch {
   uint32_t spade_switch_id;
   uint32_t spade_verbosity;
   uint32_t spade_period;
+  bool disable_ra_broadcast;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the
