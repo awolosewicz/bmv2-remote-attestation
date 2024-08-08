@@ -362,7 +362,7 @@ int
 SimpleSwitch::spade_setup_ports() { // and CLI vertices
   std::map<bm::DevMgrIface::port_t, bm::DevMgrIface::PortInfo> portinfo = get_port_info();
   uint64_t instance = get_time_since_epoch_us()/1000;
-  uint32_t spade_switch_id_special = spade_switch_id / 10;
+  uint32_t spade_switch_id_special = spade_switch_id / 10000;
   uint32_t spade_cli_id = spade_switch_id / 100;
   int rc = -1;
   for (auto it = portinfo.begin(); it != portinfo.end(); ++it) {

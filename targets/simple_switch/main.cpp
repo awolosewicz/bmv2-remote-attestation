@@ -116,7 +116,7 @@ main(int argc, char* argv[]) {
       spade_switch_id = SimpleSwitch::default_spade_id;
     else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
       std::exit(1);
-    spade_switch_id *= SPADE_SWITCH_ID_MULT; // 100M
+    spade_switch_id *= SPADE_SWITCH_ID_MULT;
   }
   
   uint32_t spade_verbosity = 0xffffffff;
