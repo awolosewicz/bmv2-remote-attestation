@@ -754,6 +754,14 @@ SimpleSwitch::ingress_thread() {
             dst += ".";
           }
         }
+        if (spade_verbosity == 4) {
+          if (prot == "6" || prot == "17") { // TCP or UDP
+            srcport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
+            packet_data += 2;
+            dstport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
+            packet_data += 2;
+          }
+        }
       }
       else if (etype == 0x86DD) {
         do_write = true;
