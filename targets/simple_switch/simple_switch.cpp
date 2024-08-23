@@ -809,24 +809,24 @@ SimpleSwitch::ingress_thread() {
             // insert_or_assign not supported with used compiler version
             spade_recorded_flows_times.insert({spade_string, instance});
             spade_recorded_flows_uids.insert({spade_string, input_uid});
-            do_write_vertex = true;
+            if (packet->get_copy_id() == 0) do_write_vertex = true;
           }
-          else if (instance != it->second && packet->get_copy_id() == 0) {
+          else if (instance != it->second) {
             spade_recorded_flows_times[spade_string] = instance;
             input_uid = spade_recorded_flows_uids[spade_string];
-            do_write_edge = true;
+            if (packet->get_copy_id() == 0) do_write_edge = true;
           }
         }
         else {
           if (it == spade_recorded_flows_times.end()) {
             spade_recorded_flows_times.insert({spade_string, instance / spade_period});
             spade_recorded_flows_uids.insert({spade_string, input_uid});
-            do_write_vertex = true;
+            if (packet->get_copy_id() == 0) do_write_vertex = true;
           }
-          else if ((instance / spade_period) != it->second && packet->get_copy_id() == 0) {
+          else if ((instance / spade_period) != it->second) {
             spade_recorded_flows_times[spade_string] = instance / spade_period;
             input_uid = spade_recorded_flows_uids[spade_string];
-            do_write_edge = true;
+            if (packet->get_copy_id() == 0) do_write_edge = true;
           }
         }
       }
