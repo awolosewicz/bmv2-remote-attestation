@@ -135,7 +135,7 @@ class SimpleSwitch : public Switch {
 
   static constexpr port_t default_drop_port = 511;
   static constexpr uint32_t default_spade_id = 1;
-  static constexpr uint32_t default_spade_verbosity = 0;
+  static constexpr uint32_t default_spade_verbosity = 3;
   static constexpr uint32_t default_spade_period = 10000;
   std::string loaded_config;
   spade_uid_t spade_prev_prog = 0;
