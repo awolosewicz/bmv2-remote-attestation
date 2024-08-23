@@ -809,29 +809,29 @@ SimpleSwitch::ingress_thread() {
             // insert_or_assign not supported with used compiler version
             spade_recorded_flows_times.insert({spade_string, instance});
             spade_recorded_flows_uids.insert({spade_string, input_uid});
-            if (packet->get_copy_id() == 0) do_write_vertex = true;
+            do_write_vertex = true;
           }
           else if (instance != it->second) {
             spade_recorded_flows_times[spade_string] = instance;
             input_uid = spade_recorded_flows_uids[spade_string];
-            if (packet->get_copy_id() == 0) do_write_edge = true;
+            do_write_edge = true;
           }
         }
         else {
           if (it == spade_recorded_flows_times.end()) {
             spade_recorded_flows_times.insert({spade_string, instance / spade_period});
             spade_recorded_flows_uids.insert({spade_string, input_uid});
-            if (packet->get_copy_id() == 0) do_write_vertex = true;
+            do_write_vertex = true;
           }
           else if ((instance / spade_period) != it->second) {
             spade_recorded_flows_times[spade_string] = instance / spade_period;
             input_uid = spade_recorded_flows_uids[spade_string];
-            if (packet->get_copy_id() == 0) do_write_edge = true;
+            do_write_edge = true;
           }
         }
       }
     }
-    if (do_write_vertex) {
+    if (do_write_vertex && packet->get_copy_id() == 0) {
       int spade_rc = spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, input_uid, spade_ss.str());
       if (spade_rc != 0) {
         BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress vertex")
@@ -839,9 +839,11 @@ SimpleSwitch::ingress_thread() {
     }
     if (do_write_vertex || do_write_edge) {
       RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
-      int spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, instance, input_uid,
+      if (packet->get_copy_id() == 0) {
+        int spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, instance, input_uid,
                                      spade_port_in_ids.find(packet->get_ingress_port())->second, "size:"+std::to_string((int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX))));
-      if (spade_rc != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
+        if (spade_rc != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
+      }
     }
     else {
       RegisterAccess::set_spade_input_uid(packet.get(), 0); // see packet.h, registers are default-initialized arrays
