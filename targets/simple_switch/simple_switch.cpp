@@ -811,7 +811,7 @@ SimpleSwitch::ingress_thread() {
             spade_recorded_flows_uids.insert({spade_string, input_uid});
             do_write_vertex = true;
           }
-          else if (instance != it->second) {
+          else if (instance != it->second && packet->get_copy_id() == 0) {
             spade_recorded_flows_times[spade_string] = instance;
             input_uid = spade_recorded_flows_uids[spade_string];
             do_write_edge = true;
@@ -823,7 +823,7 @@ SimpleSwitch::ingress_thread() {
             spade_recorded_flows_uids.insert({spade_string, input_uid});
             do_write_vertex = true;
           }
-          else if ((instance / spade_period) != it->second) {
+          else if ((instance / spade_period) != it->second && packet->get_copy_id() == 0) {
             spade_recorded_flows_times[spade_string] = instance / spade_period;
             input_uid = spade_recorded_flows_uids[spade_string];
             do_write_edge = true;
@@ -1180,7 +1180,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     }
     else if (spade_verbosity == 3 || spade_verbosity == 4) {
       spade_uid_t input_uid = 0;
-      if (packet->get_copy_id() == 0) input_uid = RegisterAccess::get_spade_input_uid(packet.get());
+      input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, 
                         "size:"+std::to_string((int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)))); 
