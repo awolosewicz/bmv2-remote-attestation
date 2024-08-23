@@ -840,7 +840,7 @@ SimpleSwitch::ingress_thread() {
     if (do_write_vertex || do_write_edge) {
       RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
       int spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, instance, input_uid,
-                                     spade_port_in_ids.find(packet->get_ingress_port())->second, "");
+                                     spade_port_in_ids.find(packet->get_ingress_port())->second, "size:"+(int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)));
       if (spade_rc != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
     }
     else {
@@ -1164,7 +1164,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     spade_uid_t output_uid = spade_switch_id + (packet->get_packet_id() * 10) + packet->get_copy_id() + 1;
     uint64_t instance = get_time_since_epoch_us()/1000;
     if (spade_verbosity == 0) {
-      spade_ss << "subtype:packet_out size:" << (int)packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX) 
+      spade_ss << "subtype:packet_out size:" << (int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)) 
                << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
                << (int)get_packet_etype(packet.get());
       spade_ss << " regs_MD5:" + registers_ra.total_hash_str << " tbls_MD5:" + tables_ra.total_hash_str
@@ -1182,7 +1182,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       spade_uid_t input_uid = 0;
       if (packet->get_copy_id() == 0) input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
-        spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, ""); 
+        spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, 
+                        "size:"+(int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX))); 
       }
     }
     output_buffer.push_front(std::move(packet));
