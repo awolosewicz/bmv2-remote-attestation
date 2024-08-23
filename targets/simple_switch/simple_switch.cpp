@@ -840,7 +840,7 @@ SimpleSwitch::ingress_thread() {
     if (do_write_vertex || do_write_edge) {
       RegisterAccess::set_spade_input_uid(packet.get(), input_uid);
       int spade_rc = spade_send_edge(SPADE_ETYPE_GENERATEDBY, instance, input_uid,
-                                     spade_port_in_ids.find(packet->get_ingress_port())->second, "size:"+(int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)));
+                                     spade_port_in_ids.find(packet->get_ingress_port())->second, "size:"+std::to_string((int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX))));
       if (spade_rc != 0) BMLOG_DEBUG_PKT(*packet, "Failed to write packet ingress edge");
     }
     else {
@@ -1183,7 +1183,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       if (packet->get_copy_id() == 0) input_uid = RegisterAccess::get_spade_input_uid(packet.get());
       if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, 
-                        "size:"+(int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX))); 
+                        "size:"+std::to_string((int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)))); 
       }
     }
     output_buffer.push_front(std::move(packet));
