@@ -717,7 +717,7 @@ SimpleSwitch::ingress_thread() {
     const Packet::buffer_state_t packet_in_state = packet->save_buffer_state();
 
     std::stringstream spade_ss;
-    spade_uid_t input_uid = spade_switch_id + (packet->get_packet_id() * 10) + packet->get_copy_id();;
+    spade_uid_t input_uid = spade_switch_id + (packet->get_packet_id() * 10);
     uint64_t instance = get_time_since_epoch_us()/1000;
     bool do_write_vertex = false;
     bool do_write_edge = false;
@@ -902,7 +902,8 @@ SimpleSwitch::ingress_thread() {
         RegisterAccess::clear_all(packet_copy.get());
         packet_copy->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX,
                                   ingress_packet_size);
-        RegisterAccess::set_spade_input_uid(packet_copy.get(), RegisterAccess::get_spade_input_uid(packet.get()));
+        spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());
+        RegisterAccess::set_spade_input_uid(packet_copy.get(), input_uid);
         // we need to parse again
         // the alternative would be to pay the (huge) price of PHV copy for
         // every ingress packet
@@ -1065,6 +1066,8 @@ SimpleSwitch::egress_thread(size_t worker_id) {
         RegisterAccess::clear_all(packet_copy.get());
         packet_copy->set_register(RegisterAccess::PACKET_LENGTH_REG_IDX,
                                   packet_size);
+        spade_uid_t input_uid = RegisterAccess::get_spade_input_uid(packet.get());
+        RegisterAccess::set_spade_input_uid(packet_copy.get(), input_uid);
         if (config.mgid_valid) {
           BMLOG_DEBUG_PKT(*packet, "Cloning packet to MGID {}", config.mgid);
           multicast(packet_copy.get(), config.mgid);
@@ -1183,6 +1186,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     else if (spade_verbosity == 3 || spade_verbosity == 4) {
       spade_uid_t input_uid = 0;
       input_uid = RegisterAccess::get_spade_input_uid(packet.get());
+      BMLOG_DEBUG_PKT(*packet, "Grabbed input uid as {}", input_uid)
       if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, 
                         "size:"+std::to_string((int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)))); 
