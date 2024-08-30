@@ -1169,7 +1169,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
     spade_uid_t output_uid = spade_switch_id + (packet->get_packet_id() * 10) + packet->get_copy_id() + 1;
     uint64_t instance = get_time_since_epoch_us()/1000;
     if (spade_verbosity == 0) {
-      spade_ss << "subtype:packet_out size:" << (int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)) 
+      spade_ss << "subtype:packet_out size:" << packet->get_data_size()
                << " ethertype:0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex 
                << (int)get_packet_etype(packet.get());
       spade_ss << " regs_MD5:" + registers_ra.total_hash_str << " tbls_MD5:" + tables_ra.total_hash_str
@@ -1189,7 +1189,7 @@ SimpleSwitch::egress_thread(size_t worker_id) {
       BMLOG_DEBUG_PKT(*packet, "Grabbed input uid as {}", input_uid)
       if (input_uid != 0) {
         spade_send_edge(SPADE_ETYPE_USED, instance, spade_port_out_ids.find(packet->get_egress_port())->second, input_uid, 
-                        "size:"+std::to_string((int)(packet->get_register(RegisterAccess::PACKET_LENGTH_REG_IDX)))); 
+                        "size:"+std::to_string(packet->get_data_size())); 
       }
     }
     output_buffer.push_front(std::move(packet));
