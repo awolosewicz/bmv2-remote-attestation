@@ -59,7 +59,7 @@ main(int argc, char* argv[]) {
       "EX: Clone 2 of packet 192 of switch 4 is 0400001922.");
   simple_switch_parser.add_uint_option(
       "spade-verbosity",
-      "The level of verbosity of traffic recorded to SPADE (default 0)\n"
+      "The level of verbosity of traffic recorded to SPADE (default 3)\n"
       "0: Capture every packet alongside size and ethertype\n"
       "1: Capture only unique flows from input to output (or drop) ports\n"
       "2: 0, but additionally include IPv4 and IPv6 addresses and protocols for those packets\n"

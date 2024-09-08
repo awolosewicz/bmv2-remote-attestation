@@ -756,9 +756,9 @@ SimpleSwitch::ingress_thread() {
         }
         if (spade_verbosity == 4) {
           if (prot == "6" || prot == "17") { // TCP or UDP
-            srcport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
+            srcport = std::to_string((uint16_t)(*packet_data << 8) | (uint16_t)(255 & *(packet_data+1)));
             packet_data += 2;
-            dstport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
+            dstport = std::to_string((uint16_t)(*packet_data << 8) | (uint16_t)(255 & *(packet_data+1)));
             packet_data += 2;
           }
         }
@@ -788,9 +788,9 @@ SimpleSwitch::ingress_thread() {
         dst = dst_ss.str();
         if (spade_verbosity == 4) {
           if (prot == "6" || prot == "17") { // TCP or UDP
-            srcport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
+            srcport = std::to_string((uint16_t)(*packet_data << 8) | (uint16_t)(255 & *(packet_data+1)));
             packet_data += 2;
-            dstport = std::to_string((short)(*packet_data << 8) | (short)(255 & *(packet_data+1)));
+            dstport = std::to_string((uint16_t)(*packet_data << 8) | (uint16_t)(255 & *(packet_data+1)));
             packet_data += 2;
           }
         }
