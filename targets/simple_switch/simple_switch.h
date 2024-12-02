@@ -28,6 +28,7 @@
 #include <bm/bm_sim/event_logger.h>
 #include <bm/bm_sim/simple_pre_lag.h>
 #include <src/bm_sim/md5.h>
+#include <src/bm_sim/utils.h>
 
 #include <memory>
 #include <chrono>
@@ -48,9 +49,22 @@
 #define SSWITCH_PRIORITY_QUEUEING_SRC "intrinsic_metadata.priority"
 #endif
 
+#define SPADE_VTYPE_AGENT 1
+#define SPADE_VTYPE_PROCESS 2
+#define SPADE_VTYPE_ARTIFACT 3
+
+#define SPADE_ETYPE_USED 1
+#define SPADE_ETYPE_GENERATEDBY 2
+#define SPADE_ETYPE_TRIGGEREDBY 3
+#define SPADE_ETYPE_DERIVEDFROM 4
+#define SPADE_ETYPE_CONTROLLEDBY 5
+#define SPADE_SWITCH_ID_MULT 100000000 // 100M
+
 using ts_res = std::chrono::microseconds;
 using std::chrono::duration_cast;
 using ticks = std::chrono::nanoseconds;
+using spade_uid_t = uint32_t;
+#define SPADE_UID_MAX 0xffffffff
 
 using bm::Switch;
 using bm::Context;
@@ -78,8 +92,11 @@ class HashList {
  public:
   std::unordered_map<std::string, unsigned char*> map{};
   unsigned char total_hash[16] = {0};
+  std::string total_hash_str = "";
   
   void update(std::string nkey, unsigned char* nhash) {
+    std::stringstream hex_ss;
+    hex_ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex;
     auto it = map.find(nkey);
     if (it == map.end()) {
       unsigned char *shash = (unsigned char*)malloc(16);
@@ -87,15 +104,18 @@ class HashList {
       map.insert({nkey, shash});
       for (int i = 0; i < 16; ++i) {
         total_hash[i] += nhash[i];
+        hex_ss << (int)total_hash[i];
       }
     }
     else {
       for (int i = 0; i < 16; ++i) {
         total_hash[i] -= it->second[i];
         total_hash[i] += nhash[i];
+        hex_ss << (int)total_hash[i];
       }
       memcpy(it->second, nhash, 16);
     }
+    total_hash_str = hex_ss.str();
   }
 };
 
@@ -116,15 +136,30 @@ class SimpleSwitch : public Switch {
   static constexpr port_t default_drop_port = 511;
   static constexpr port_t default_ra_port = 0;
   static constexpr uint32_t default_ra_etype = 0x5241;
+  static constexpr uint32_t default_spade_id = 1;
+  static constexpr uint32_t default_spade_verbosity = 3;
+  static constexpr uint32_t default_spade_period = 10000;
+  std::string loaded_config;
+  spade_uid_t spade_prev_prog = 0;
+  uint32_t spade_uid_ctr = 0;
+  std::string prog_hash_str = "";
+  std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_in_ids {};
+  std::map<bm::DevMgrIface::port_t, spade_uid_t> spade_port_out_ids {};
+  std::unordered_map<std::string, spade_uid_t> spade_register_ids {};
+  std::unordered_map<std::string, spade_uid_t> spade_table_ids {};
+  std::unordered_map<std::string, uint64_t> spade_recorded_flows_times {};
+  std::unordered_map<std::string, spade_uid_t> spade_recorded_flows_uids {};
 
  private:
   using clock = std::chrono::high_resolution_clock;
+  mutable boost::shared_mutex spade_mutex{};
 
   // Remote Attestation registers
   static constexpr size_t nb_ra_registers = 3;
   unsigned char ra_registers[16*nb_ra_registers];
   mutable boost::shared_mutex ra_reg_mutex{};
   mutable boost::shared_mutex ra_tbl_mutex{};
+  mutable boost::shared_mutex ra_prog_mutex{};
 
  public:
   // by default, swapping is off
@@ -132,7 +167,12 @@ class SimpleSwitch : public Switch {
                         port_t drop_port = default_drop_port,
                         bool enable_ra = false,
                         port_t ra_port = default_ra_port,
-                        uint32_t ra_etype = default_ra_etype);
+                        uint32_t ra_etype = default_ra_etype
+                        bool enable_spade = false,
+                        std::string spade_file = "spade_pipe",
+                        uint32_t spade_switch_id = default_spade_id,
+                        uint32_t spade_verbosity = default_spade_verbosity,
+                        uint32_t spade_period = default_spade_period);
 
   ~SimpleSwitch();
 
@@ -158,6 +198,9 @@ class SimpleSwitch : public Switch {
   int set_egress_queue_rate(size_t port, const uint64_t rate_pps);
   int set_all_egress_queue_rates(const uint64_t rate_pps);
 
+  unsigned short get_packet_etype(bm::Packet* packet);
+  char * get_post_ethernet(bm::Packet* packet);
+
   // returns the number of microseconds elapsed since the switch started
   uint64_t get_time_elapsed_us() const;
 
@@ -175,6 +218,13 @@ class SimpleSwitch : public Switch {
     return drop_port;
   }
 
+  int spade_send_vertex(int type, uint64_t instance, spade_uid_t spade_uid, std::string vals);
+  int spade_send_edge(int type, uint64_t instance, spade_uid_t from, spade_uid_t to, std::string vals);
+  int spade_setup_ports();
+  std::string get_spade_file() const;
+  bool get_enable_spade() const;
+  int get_spade_cli_id() const;
+
   // RA Register Access
   void set_ra_registers(unsigned char *val, unsigned int idx);
   unsigned char* get_ra_register(unsigned int idx);
@@ -183,8 +233,9 @@ class SimpleSwitch : public Switch {
 
   // Get MD5 of register through hashing all the register elements
   // Uses binary representation of Data to avoid unknown of using Data directly
-  void ra_update_reghash(cxt_id_t cxt_id, const std::string &register_name) {
-    if (!enable_ra) return;
+  void ra_update_reghash(cxt_id_t cxt_id, const std::string &register_name, std::string &spade_str) {
+    if (!enable_ra && !enable_spade) return;
+    uint64_t instance = get_time_since_epoch_us()/1000;
     boost::unique_lock<boost::shared_mutex> lock(ra_reg_mutex);
     MD5_CTX reg_md5_ctx;
     MD5_Init(&reg_md5_ctx);
@@ -197,11 +248,36 @@ class SimpleSwitch : public Switch {
     MD5_Final(reg_md5, &reg_md5_ctx);
     registers_ra.update(register_name, reg_md5);
     set_ra_registers(registers_ra.total_hash, 0);
+    std::stringstream hash_ss;
+    hash_ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex;
+    for (int i = 0; i < 16; ++i) {
+      hash_ss << (int)reg_md5[i];
+    }
+    auto it = spade_register_ids.find(register_name);
+    uint32_t spade_switch_id_special = spade_switch_id / 10;
+    if (it == spade_register_ids.end()) {
+      spade_uid_t register_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, register_uid,
+                        "subtype:register register:"+register_name+" MD5:"+hash_ss.str()
+                        +" regs_MD5:"+registers_ra.total_hash_str+" "+spade_str);
+      spade_register_ids.insert({register_name, register_uid});
+    }
+    else {
+      spade_uid_t cur_register_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, cur_register_uid,
+                        "subtype:register register:"+register_name+" MD5:"+hash_ss.str()
+                        +" regs_MD5:"+registers_ra.total_hash_str);
+      spade_uid_t prev_register_uid = it->second;
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, cur_register_uid, prev_register_uid, spade_str);
+      it->second = cur_register_uid;
+    }
   }
+
   // Get MD5 of tables through hashing all the entries
-  // AN entry, in this case, is the match key(s), associated function, and function data
-  void ra_update_tblhash(cxt_id_t cxt_id, const std::string &table_name) {
-    if (!enable_ra) return;
+  // An entry, in this case, is the match key(s), associated function, and function data
+  void ra_update_tblhash(cxt_id_t cxt_id, const std::string &table_name, std::string &spade_str) {
+    if (!enable_ra && !enable_spade) return;
+    uint64_t instance = get_time_since_epoch_us()/1000;
     boost::unique_lock<boost::shared_mutex> lock(ra_tbl_mutex);
     MD5_CTX tbl_md5_ctx;
     MD5_Init(&tbl_md5_ctx);
@@ -227,10 +303,36 @@ class SimpleSwitch : public Switch {
     MD5_Final(tbl_md5, &tbl_md5_ctx);
     tables_ra.update(table_name, tbl_md5);
     set_ra_registers(tables_ra.total_hash, 1);
+
+    std::stringstream hash_ss;
+    hash_ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex;
+    for (int i = 0; i < 16; ++i) {
+      hash_ss << (int)tbl_md5[i];
+    }
+    auto it = spade_table_ids.find(table_name);
+    uint32_t spade_switch_id_special = spade_switch_id / 10;
+    if (it == spade_table_ids.end()) {
+      spade_uid_t table_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, table_uid,
+                        "subtype:table table:"+table_name+" MD5:"+hash_ss.str()
+                        +" tbls_MD5:"+tables_ra.total_hash_str+" "+spade_str);
+      spade_table_ids.insert({table_name, table_uid});
+    }
+    else {
+      spade_uid_t cur_table_uid = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, cur_table_uid,
+                        "subtype:table table:"+table_name+" MD5:"+hash_ss.str()
+                        +" tbls_MD5:"+tables_ra.total_hash_str);
+      spade_uid_t prev_table_uid = it->second;
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, cur_table_uid, prev_table_uid, spade_str);
+      it->second = cur_table_uid;
+    }
   }
 
   void ra_update_proghash() {
-    if (!enable_ra) return;
+    if (!enable_ra && !enable_spade) return;
+    uint64_t instance = get_time_since_epoch_us()/1000;
+    boost::unique_lock<boost::shared_mutex> lock(ra_prog_mutex);
     MD5_CTX prog_md5_ctx;
     MD5_Init(&prog_md5_ctx);
     std::string current_config = get_config();
@@ -238,6 +340,24 @@ class SimpleSwitch : public Switch {
     unsigned char prog_md5[16];
     MD5_Final(prog_md5, &prog_md5_ctx);
     set_ra_registers(prog_md5, 2);
+
+    std::stringstream hash_ss;
+    hash_ss << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex;
+    for (int i = 0; i < 16; ++i) {
+      hash_ss << (int)prog_md5[i];
+    }
+    prog_hash_str = hash_ss.str();
+    uint32_t spade_switch_id_special = spade_switch_id / 10;
+    if (spade_prev_prog == 0) {
+      spade_prev_prog = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, spade_prev_prog, "subtype:program MD5:"+prog_hash_str);
+    }
+    else {
+      spade_uid_t spade_cur_prog = spade_switch_id_special + spade_uid_ctr++;
+      spade_send_vertex(SPADE_VTYPE_ARTIFACT, instance, spade_cur_prog, "subtype:program MD5:"+prog_hash_str);
+      spade_send_edge(SPADE_ETYPE_DERIVEDFROM, instance, spade_cur_prog, spade_prev_prog, "command:swap_configs");
+      spade_prev_prog = spade_cur_prog;
+    }
   }
 
   // Hook Register/Table/Program modifying functions so they update the hashes post-update
@@ -246,7 +366,12 @@ class SimpleSwitch : public Switch {
                  const std::string &register_name,
                  const size_t idx, Data value) {
     auto retval = Switch::register_write(cxt_id, register_name, idx, value);
-    ra_update_reghash(cxt_id, register_name);
+    // register_write <register_name> <idx> <value>
+    std::stringstream spade_ss;
+    spade_ss <<  "command:register_write\\ " << register_name << "\\ " << idx << "\\ ";
+    bm::utils::dump_hexstring(spade_ss, value.get_string());
+    std::string spade_str = spade_ss.str();
+    ra_update_reghash(cxt_id, register_name, spade_str);
     return retval;
   }
 
@@ -257,14 +382,21 @@ class SimpleSwitch : public Switch {
                        Data value) override {
     auto retval = Switch::register_write_range(cxt_id,
         register_name, start, end, std::move(value));
-    ra_update_reghash(cxt_id, register_name);
+    // register_write_rangfe <register_name> <start> <end> <value>
+    std::stringstream spade_ss;
+    spade_ss <<  "command:register_write\\ " << register_name << "\\ " << start << "\\ " << end << "\\ ";
+    bm::utils::dump_hexstring(spade_ss, value.get_string());
+    std::string spade_str = spade_ss.str();
+    ra_update_reghash(cxt_id, register_name, spade_str);
     return retval;
   }
 
   RegisterErrorCode
   register_reset(cxt_id_t cxt_id, const std::string &register_name) override {
     auto retval = Switch::register_reset(cxt_id, register_name);
-    ra_update_reghash(cxt_id, register_name);
+    // register_reset <register_name>
+    std::string spade_str = "command:register_reset\\ " + register_name;
+    ra_update_reghash(cxt_id, register_name, spade_str);
     return retval;
   }
 
@@ -273,7 +405,9 @@ class SimpleSwitch : public Switch {
                     const std::string &table_name,
                     bool reset_default_entry) {
     auto retval = Switch::mt_clear_entries(cxt_id, table_name, reset_default_entry);
-    ra_update_tblhash(cxt_id, table_name);
+    // table_clear <table_name>
+    std::string spade_str = "command:table_clear\\ " + table_name;
+    ra_update_tblhash(cxt_id, table_name, spade_str);
     return retval;
   }
 
@@ -285,10 +419,40 @@ class SimpleSwitch : public Switch {
                ActionData action_data,
                entry_handle_t *handle,
                int priority = -1  /*only used for ternary*/) {
+    // table_add <table name> <action name> <match fields> => <action parameters> [priority]
+    std::stringstream spade_ss;
+    spade_ss << "command:table_add\\ " << table_name << "\\ " << action_name << "\\ ";
+    // Borrowed from MatchKeyParam operator>> to avoid unneeded TYPE and formatting output
+    for (auto it = match_key.begin(); it != match_key.end(); ++it) {
+      bm::utils::dump_hexstring(spade_ss, it->key);
+      switch (it->type) {
+        case MatchKeyParam::Type::LPM:
+          spade_ss << "/" << it->prefix_length;
+          break;
+        case MatchKeyParam::Type::TERNARY:
+          spade_ss << "\\ &&&\\ ";
+          bm::utils::dump_hexstring(spade_ss, it->mask);
+          break;
+        case MatchKeyParam::Type::RANGE:
+          spade_ss << "\\ ->\\ ";
+          bm::utils::dump_hexstring(spade_ss, it->mask);
+          break;
+        default:
+          break;
+      }
+      spade_ss << "\\ ";
+    }
+    spade_ss << "=>";
+    for (size_t q = 0; q < action_data.size(); ++q) {
+      spade_ss << "\\ ";
+      bm::utils::dump_hexstring(spade_ss, action_data.get(q).get_string());
+    }
+    if (priority > -1) spade_ss << "\\ " << priority;
+    std::string spade_str = spade_ss.str();
     auto retval = Switch::mt_add_entry(
         cxt_id, table_name, match_key, action_name,
         std::move(action_data), handle, priority);
-    ra_update_tblhash(cxt_id, table_name);
+    ra_update_tblhash(cxt_id, table_name, spade_str);
     return retval;
   }
 
@@ -297,7 +461,9 @@ class SimpleSwitch : public Switch {
                   const std::string &table_name,
                   entry_handle_t handle) {
     auto retval = Switch::mt_delete_entry(cxt_id, table_name, handle);
-    ra_update_tblhash(cxt_id, table_name);
+    // table_delete <table_name> <handle>
+    std::string spade_str = "command:table_delete\\ " + table_name + "\\ " + std::to_string(handle);
+    ra_update_tblhash(cxt_id, table_name, spade_str);
     return retval;
   }
 
@@ -307,9 +473,25 @@ class SimpleSwitch : public Switch {
                   entry_handle_t handle,
                   const std::string &action_name,
                   ActionData action_data) override {
+    // table_modify <table name> <action name> <entry handle> [action parameters]
+    std::stringstream spade_ss;
+    spade_ss << "command:table_modify\\ " << table_name << "\\ " << action_name << "\\ " << std::to_string(handle);
+    for (size_t q = 0; q < action_data.size(); ++q) {
+      spade_ss << "\\ ";
+      bm::utils::dump_hexstring(spade_ss, action_data.get(q).get_string());
+    }
+    std::string spade_str = spade_ss.str();
     auto retval = Switch::mt_modify_entry(cxt_id,
         table_name, handle, action_name, std::move(action_data));
-    ra_update_tblhash(cxt_id, table_name);
+    ra_update_tblhash(cxt_id, table_name, spade_str);
+    return retval;
+  }
+
+  // This grabs the JSON string and NOT the file name passed to the CLI
+  RuntimeInterface::ErrorCode
+  load_new_config(const std::string &new_config) {
+    auto retval = Switch::load_new_config(new_config);
+    loaded_config = new_config;
     return retval;
   }
 
@@ -332,6 +514,7 @@ class SimpleSwitch : public Switch {
   class MirroringSessions;
 
   class InputBuffer;
+  class SpadeBuffer;
 
   enum PktInstanceType {
     PKT_INSTANCE_TYPE_NORMAL,
@@ -355,6 +538,7 @@ class SimpleSwitch : public Switch {
   };
 
  private:
+  void spade_thread();
   void ingress_thread();
   void egress_thread(size_t worker_id);
   void transmit_thread();
@@ -378,6 +562,11 @@ class SimpleSwitch : public Switch {
   bool enable_ra;
   port_t ra_port;
   uint32_t ra_etype;
+  bool enable_spade;
+  std::string spade_file;
+  uint32_t spade_switch_id;
+  uint32_t spade_verbosity;
+  uint32_t spade_period;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the
@@ -389,6 +578,7 @@ class SimpleSwitch : public Switch {
 #endif
   egress_buffers;
   Queue<std::unique_ptr<Packet> > output_buffer;
+  Queue<std::string> spade_buffer;
   TransmitFn my_transmit_fn;
   std::shared_ptr<McSimplePreLAG> pre;
   clock::time_point start;

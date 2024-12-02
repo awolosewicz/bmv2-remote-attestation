@@ -20,6 +20,7 @@
 
 #ifndef SIMPLE_SWITCH_REGISTER_ACCESS_H_
 #define SIMPLE_SWITCH_REGISTER_ACCESS_H_
+using spade_uid_t = uint32_t;
 
 
 class RegisterAccess {
@@ -47,10 +48,16 @@ class RegisterAccess {
     static constexpr uint16_t MIRROR_SESSION_ID_VALID_MASK = (1u << 15);
     static constexpr uint16_t MIRROR_SESSION_ID_MASK = 0x7FFFu;
 
+    static constexpr int SPADE_PKT_IN_UID_REG_IDX = 3;
+    static constexpr uint64_t SPADE_PKT_IN_UID_MASK = 0x00000000ffffffff;
+    static constexpr uint64_t SPADE_PKT_IN_UID_SHIFT = 0;
+
+
     static void clear_all(Packet *pkt) {
         // except do not clear packet length
         pkt->set_register(1, 0);
         pkt->set_register(2, 0);
+        pkt->set_register(3, 0);
     }
     static uint16_t get_clone_mirror_session_id(Packet *pkt) {
         uint64_t rv = pkt->get_register(CLONE_MIRROR_SESSION_ID_REG_IDX);
@@ -110,6 +117,17 @@ class RegisterAccess {
               ((static_cast<uint64_t>(field_list_id)) <<
                RECIRCULATE_FLAG_SHIFT));
         pkt->set_register(RECIRCULATE_FLAG_REG_IDX, rv);
+    }
+    static spade_uid_t get_spade_input_uid(Packet *pkt) {
+        uint64_t rv = pkt->get_register(SPADE_PKT_IN_UID_REG_IDX);
+        return static_cast<spade_uid_t>((rv & SPADE_PKT_IN_UID_MASK) >>
+                                        SPADE_PKT_IN_UID_SHIFT);
+    }
+    static void set_spade_input_uid(Packet *pkt, spade_uid_t input_uid) {
+        uint64_t rv = pkt->get_register(SPADE_PKT_IN_UID_REG_IDX);
+        rv = ((rv & ~SPADE_PKT_IN_UID_MASK) |
+              ((static_cast<uint64_t>(input_uid)) << SPADE_PKT_IN_UID_SHIFT));
+        pkt->set_register(SPADE_PKT_IN_UID_REG_IDX, rv);
     }
 };
 

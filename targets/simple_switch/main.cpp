@@ -55,6 +55,33 @@ main(int argc, char* argv[]) {
   simple_switch_parser.add_uint_option(
       "ra-etype",
       "Choose the ethertype for RA packets, as an integer (default is 34850 or 0x8822)");
+  simple_switch_parser.add_flag_option(
+      "enable-spade",
+      "Enable writing to SPADE pipe");
+  simple_switch_parser.add_string_option(
+      "spade-file",
+      "The file to write provenance information to (default is spade_pipe). Requires --enable-spade");
+  simple_switch_parser.add_uint_option(
+      "spade-switch-id",
+      "Choose id for this switch, 1-20 (default 1). All vertices from this switch will have IDs of [switch][packet][clone].\n"
+      "Switch is 1-20 inclusive (0 reserved), packet is 1-(10M-1), clone is 2-9 (parent in is 0, out is 1).\n"
+      "EX: Clone 2 of packet 192 of switch 4 is 0400001922.");
+  simple_switch_parser.add_uint_option(
+      "spade-verbosity",
+      "The level of verbosity of traffic recorded to SPADE (default 3)\n"
+      "0: Capture every packet alongside size and ethertype\n"
+      "1: Capture only unique flows from input to output (or drop) ports\n"
+      "2: 0, but additionally include IPv4 and IPv6 addresses and protocols for those packets\n"
+      "3: Capture unique flows based off source and destination IPv4/IPv6 addresses\n"
+      "4: 3, but also unique based off TCP/UDP source and destination ports");
+  simple_switch_parser.add_uint_option(
+      "spade-period",
+      "The length of the polling period in ms where, for verbosity options that capture unique flows,\n"
+      "duplicate flows will be recorded. For example, a value of 5000 means duplicate flows will be recorded\n"
+      "every 5s as long as the flow occurs within the 5s window (default 10000). 0 captures all flows.");
+  simple_switch_parser.add_flag_option(
+      "disable-ra-broadcast",
+      "Disables the ethernet broadcast of RA evidence.");
 
   bm::OptionsParser parser;
   parser.parse(argc, argv, &simple_switch_parser);
@@ -98,10 +125,65 @@ main(int argc, char* argv[]) {
       std::exit(1);
   }
 
-  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_ra_flag, ra_port, ra_etype);
+  bool enable_spade_flag = false;
+  if (simple_switch_parser.get_flag_option("enable-spade", &enable_spade_flag)
+      != bm::TargetParserBasic::ReturnCode::SUCCESS) {
+    std::exit(1);
+  }
+  
+  std::string spade_file = "";
+  if (enable_spade_flag) {
+    {
+      auto rc = simple_switch_parser.get_string_option("spade-file", &spade_file);
+      if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+        spade_file = "spade_pipe";
+      else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+        std::exit(1);
+    }
+  }
+  
+  uint32_t spade_switch_id = 0xffffffff;
+  {
+    auto rc = simple_switch_parser.get_uint_option("spade-switch-id", &spade_switch_id);
+    if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+      spade_switch_id = SimpleSwitch::default_spade_id;
+    else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+      std::exit(1);
+    spade_switch_id *= SPADE_SWITCH_ID_MULT;
+  }
+  
+  uint32_t spade_verbosity = 0xffffffff;
+  {
+    auto rc = simple_switch_parser.get_uint_option("spade-verbosity", &spade_verbosity);
+    if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+      spade_verbosity = SimpleSwitch::default_spade_verbosity;
+    else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+      std::exit(1);
+  }
+  
+  uint32_t spade_period = 0xffffffff;
+  {
+    auto rc = simple_switch_parser.get_uint_option("spade-period", &spade_period);
+    if (rc == bm::TargetParserBasic::ReturnCode::OPTION_NOT_PROVIDED)
+      spade_period = SimpleSwitch::default_spade_period;
+    else if (rc != bm::TargetParserBasic::ReturnCode::SUCCESS)
+      std::exit(1);
+  }
 
+  bool disable_ra_broadcast_flag = false;
+  if (simple_switch_parser.get_flag_option("disable-ra-broadcast", &disable_ra_broadcast_flag)
+      != bm::TargetParserBasic::ReturnCode::SUCCESS) {
+    std::exit(1);
+  }
+
+  simple_switch = new SimpleSwitch(enable_swap_flag, drop_port, enable_ra_flag, ra_port, ra_etype, enable_spade_flag, spade_file, spade_switch_id,
+                                   spade_verbosity, spade_period, disable_ra_broadcast_flag);
   int status = simple_switch->init_from_options_parser(parser);
   if (status != 0) std::exit(status);
+  if (enable_spade_flag){
+    int spade_status = simple_switch->spade_setup_ports();
+    if (spade_status != 0) std::exit(1);
+  }
 
   int thrift_port = simple_switch->get_runtime_port();
   bm_runtime::start_server(simple_switch, thrift_port);
