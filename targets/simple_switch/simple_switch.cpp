@@ -198,7 +198,7 @@ class SimpleSwitch::InputBuffer {
   QueueImpl queue_lo;
 };
 
-SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_spade, std::string spade_file,
+SimpleSwitch::SimpleSwitch(bool enable_swap, port_t drop_port, bool enable_ra, port_t ra_port, uint32_t ra_etype, bool enable_spade, std::string spade_file,
                            uint32_t spade_switch_id, uint32_t spade_verbosity, uint32_t spade_period, bool disable_ra_broadcast)
   : Switch(enable_swap),
     drop_port(drop_port),

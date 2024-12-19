@@ -167,12 +167,13 @@ class SimpleSwitch : public Switch {
                         port_t drop_port = default_drop_port,
                         bool enable_ra = false,
                         port_t ra_port = default_ra_port,
-                        uint32_t ra_etype = default_ra_etype
+                        uint32_t ra_etype = default_ra_etype,
                         bool enable_spade = false,
                         std::string spade_file = "spade_pipe",
                         uint32_t spade_switch_id = default_spade_id,
                         uint32_t spade_verbosity = default_spade_verbosity,
-                        uint32_t spade_period = default_spade_period);
+                        uint32_t spade_period = default_spade_period,
+                        bool disable_ra_broadcast = true);
 
   ~SimpleSwitch();
 
@@ -567,6 +568,7 @@ class SimpleSwitch : public Switch {
   uint32_t spade_switch_id;
   uint32_t spade_verbosity;
   uint32_t spade_period;
+  bool disable_ra_broadcast;
   std::vector<std::thread> threads_;
   std::unique_ptr<InputBuffer> input_buffer;
   // for these queues, the write operation is non-blocking and we drop the
