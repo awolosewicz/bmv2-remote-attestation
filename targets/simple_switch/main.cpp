@@ -170,7 +170,7 @@ main(int argc, char* argv[]) {
       std::exit(1);
   }
 
-  bool disable_ra_broadcast_flag = enable_ra_flag;
+  bool disable_ra_broadcast_flag = !enable_ra_flag;
   if (simple_switch_parser.get_flag_option("disable-ra-broadcast", &disable_ra_broadcast_flag)
       != bm::TargetParserBasic::ReturnCode::SUCCESS) {
     std::exit(1);
